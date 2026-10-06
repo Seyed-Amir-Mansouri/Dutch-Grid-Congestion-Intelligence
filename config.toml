@@ -1,0 +1,31 @@
+[paths]
+sdac = "data/raw/sdac_results.csv"
+forecasts = "data/raw/system_forecasts.csv"
+outages = "data/raw/planned_outages.csv"
+gopacs = "data/raw/gopacs_events.csv"
+model_dir = "models"
+predictions = "outputs/predictions.csv"
+validation = "outputs/validation_history.csv"
+
+[areas]
+codes = ["NL1", "NL2", "NL3", "NL4", "NL5"]
+
+[features]
+history_days = 7
+event_lag_days = 2
+price_lag_days = 1
+
+[labels]
+settle_days = 1
+
+[model]
+test_days = 60
+threshold = 0.5
+learning_rate = 0.05
+max_iter = 300
+max_leaf_nodes = 31
+random_state = 42
+
+[validation]
+window_days = 14
+min_skill = 0.0
