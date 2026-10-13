@@ -20,6 +20,13 @@ def _read_csv(path: Path, columns: list[str]) -> pd.DataFrame:
     return frame[columns].copy()
 
 
+def _normalize_market(frame: pd.DataFrame) -> pd.DataFrame:
+    """Set key dtypes on a national, area-less frame."""
+    frame["delivery_date"] = pd.to_datetime(frame["delivery_date"]).dt.normalize()
+    frame["hour"] = frame["hour"].astype(int)
+    return frame.sort_values(schemas.MARKET_KEY).reset_index(drop=True)
+
+
 def _normalize_keys(frame: pd.DataFrame, areas: tuple[str, ...]) -> pd.DataFrame:
     """Set key dtypes and keep only the configured areas."""
     frame["delivery_date"] = pd.to_datetime(frame["delivery_date"]).dt.normalize()
@@ -29,16 +36,16 @@ def _normalize_keys(frame: pd.DataFrame, areas: tuple[str, ...]) -> pd.DataFrame
     return frame.sort_values(schemas.KEY).reset_index(drop=True)
 
 
-def load_sdac(path: Path, areas: tuple[str, ...]) -> pd.DataFrame:
-    """Load day-ahead clearing prices and net positions per area and hour."""
+def load_sdac(path: Path) -> pd.DataFrame:
+    """Load national day-ahead clearing prices and net positions per hour."""
     frame = _read_csv(path, schemas.SDAC_COLUMNS)
-    return _normalize_keys(frame, areas)
+    return _normalize_market(frame)
 
 
-def load_forecasts(path: Path, areas: tuple[str, ...]) -> pd.DataFrame:
-    """Load load, wind and solar forecasts per area and hour."""
+def load_forecasts(path: Path) -> pd.DataFrame:
+    """Load national load, wind and solar forecasts per hour."""
     frame = _read_csv(path, schemas.FORECAST_COLUMNS)
-    return _normalize_keys(frame, areas)
+    return _normalize_market(frame)
 
 
 def load_outages(path: Path | None, areas: tuple[str, ...]) -> pd.DataFrame | None:

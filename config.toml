@@ -7,6 +7,7 @@ model_dir = "models"
 predictions = "outputs/predictions.csv"
 validation = "outputs/validation_history.csv"
 
+# placeholder congestion-area codes, replace with real GOPACS location codes
 [areas]
 codes = ["NL1", "NL2", "NL3", "NL4", "NL5"]
 

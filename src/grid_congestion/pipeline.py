@@ -24,8 +24,8 @@ def load_inputs(config: Config) -> Inputs:
     """Read every configured input file."""
     areas = config.areas
     return Inputs(
-        sdac=ingest.load_sdac(config.resolve(config.paths.sdac), areas),
-        forecasts=ingest.load_forecasts(config.resolve(config.paths.forecasts), areas),
+        sdac=ingest.load_sdac(config.resolve(config.paths.sdac)),
+        forecasts=ingest.load_forecasts(config.resolve(config.paths.forecasts)),
         outages=ingest.load_outages(
             config.resolve(config.paths.outages) if config.paths.outages else None, areas
         ),

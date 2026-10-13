@@ -57,7 +57,19 @@ def build_dataset(
     label_end: pd.Timestamp | None,
 ) -> pd.DataFrame:
     """Join inputs and build features, with the target set for dates up to label_end."""
-    frame = sdac.merge(forecasts, on=schemas.KEY, how="inner")
+    days = config.features.history_days
+
+    market = sdac.merge(forecasts, on=schemas.MARKET_KEY, how="inner")
+    market = market.sort_values(schemas.MARKET_KEY).reset_index(drop=True)
+    market["residual_load_mw"] = (
+        market["load_forecast_mw"] - market["wind_forecast_mw"] - market["solar_forecast_mw"]
+    )
+    market["price_hist_mean"] = lagged_rolling(
+        market, "price_eur_mwh", ["hour"], days, config.features.price_lag_days, "mean"
+    )
+
+    areas = pd.DataFrame({"area": list(config.areas)})
+    frame = market.merge(areas, how="cross")
     if outages is not None:
         frame = frame.merge(outages, on=schemas.KEY, how="left")
     else:
@@ -67,15 +79,7 @@ def build_dataset(
     frame["weekday"] = frame["delivery_date"].dt.weekday
     frame["month"] = frame["delivery_date"].dt.month
     frame["is_weekend"] = (frame["weekday"] >= 5).astype(int)
-    frame["residual_load_mw"] = (
-        frame["load_forecast_mw"] - frame["wind_forecast_mw"] - frame["solar_forecast_mw"]
-    )
-
     frame = frame.sort_values(schemas.KEY).reset_index(drop=True)
-    days = config.features.history_days
-    frame["price_hist_mean"] = lagged_rolling(
-        frame, "price_eur_mwh", ["area", "hour"], days, config.features.price_lag_days, "mean"
-    )
 
     labelled = label_grid(frame[schemas.KEY], events)
     frame = frame.merge(labelled, on=schemas.KEY, how="left")
