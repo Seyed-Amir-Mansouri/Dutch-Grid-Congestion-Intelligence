@@ -16,8 +16,9 @@ def build_client(api_key: str):
     return EntsoePandasClient(api_key=api_key)
 
 
-def _hourly_frame(series: pd.Series, column: str) -> pd.DataFrame:
-    """Resample a tz-aware series to hourly means and split into date and hour."""
+def _hourly_frame(series: pd.Series, column: str, end: pd.Timestamp) -> pd.DataFrame:
+    """Resample a tz-aware series to hourly means, excluding the end boundary."""
+    series = series[series.index < end]
     hourly = series.resample("1h").mean()
     frame = hourly.rename(column).reset_index()
     frame = frame.rename(columns={frame.columns[0]: "timestamp"})
@@ -31,8 +32,8 @@ def fetch_sdac(client, start: pd.Timestamp, end: pd.Timestamp) -> pd.DataFrame:
     price = client.query_day_ahead_prices(AREA, start=start, end=end)
     position = client.query_net_position(AREA, start=start, end=end, dayahead=True)
 
-    price_frame = _hourly_frame(price, "price_eur_mwh")
-    position_frame = _hourly_frame(position, "net_position_mw")
+    price_frame = _hourly_frame(price, "price_eur_mwh", end)
+    position_frame = _hourly_frame(position, "net_position_mw", end)
     merged = price_frame.merge(position_frame, on=schemas.MARKET_KEY, how="outer")
     return merged.sort_values(schemas.MARKET_KEY).reset_index(drop=True)
 
@@ -44,9 +45,9 @@ def fetch_forecasts(client, start: pd.Timestamp, end: pd.Timestamp) -> pd.DataFr
     wind = renewables.get("Wind Onshore", 0) + renewables.get("Wind Offshore", 0)
     solar = renewables.get("Solar", 0)
 
-    load_frame = _hourly_frame(load, "load_forecast_mw")
-    wind_frame = _hourly_frame(wind, "wind_forecast_mw")
-    solar_frame = _hourly_frame(solar, "solar_forecast_mw")
+    load_frame = _hourly_frame(load, "load_forecast_mw", end)
+    wind_frame = _hourly_frame(wind, "wind_forecast_mw", end)
+    solar_frame = _hourly_frame(solar, "solar_forecast_mw", end)
 
     merged = load_frame.merge(wind_frame, on=schemas.MARKET_KEY, how="outer")
     merged = merged.merge(solar_frame, on=schemas.MARKET_KEY, how="outer")

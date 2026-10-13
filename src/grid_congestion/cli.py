@@ -43,8 +43,8 @@ def cmd_fetch_entsoe(args: argparse.Namespace) -> None:
 
     config = load_config(args.config)
     client = entsoe_source.build_client(api_key)
-    start = _timestamp(args.start)
-    end = _timestamp(args.end)
+    start = _timestamp(args.start).tz_localize("Europe/Amsterdam")
+    end = _timestamp(args.end).tz_localize("Europe/Amsterdam")
 
     sdac = entsoe_source.fetch_sdac(client, start, end)
     forecasts = entsoe_source.fetch_forecasts(client, start, end)
