@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from datetime import datetime, timezone
 
@@ -29,6 +30,33 @@ def cmd_demo(args: argparse.Namespace) -> None:
     written = synthetic.generate(config, start=args.start, days=args.days, seed=args.seed)
     for name, path in written.items():
         print(f"{name}: {path}")
+
+
+def cmd_fetch_entsoe(args: argparse.Namespace) -> None:
+    """Fetch SDAC prices, net position and forecasts from ENTSO-E and write CSVs."""
+    from . import entsoe_source
+
+    api_key = os.environ.get("ENTSOE_API_KEY")
+    if not api_key:
+        print("ENTSOE_API_KEY is not set", file=sys.stderr)
+        sys.exit(1)
+
+    config = load_config(args.config)
+    client = entsoe_source.build_client(api_key)
+    start = _timestamp(args.start)
+    end = _timestamp(args.end)
+
+    sdac = entsoe_source.fetch_sdac(client, start, end)
+    forecasts = entsoe_source.fetch_forecasts(client, start, end)
+
+    sdac_path = config.resolve(config.paths.sdac)
+    forecasts_path = config.resolve(config.paths.forecasts)
+    sdac_path.parent.mkdir(parents=True, exist_ok=True)
+    forecasts_path.parent.mkdir(parents=True, exist_ok=True)
+    sdac.to_csv(sdac_path, index=False)
+    forecasts.to_csv(forecasts_path, index=False)
+    print(f"sdac: {sdac_path} ({len(sdac)} rows)")
+    print(f"forecasts: {forecasts_path} ({len(forecasts)} rows)")
 
 
 def cmd_train(args: argparse.Namespace) -> None:
@@ -93,6 +121,11 @@ def build_parser() -> argparse.ArgumentParser:
     demo.add_argument("--days", type=int, default=365)
     demo.add_argument("--seed", type=int, default=7)
     demo.set_defaults(func=cmd_demo)
+
+    fetch = sub.add_parser("fetch-entsoe", help="fetch NL SDAC and forecast data from ENTSO-E")
+    fetch.add_argument("--start", required=True, help="start date YYYY-MM-DD")
+    fetch.add_argument("--end", required=True, help="end date YYYY-MM-DD")
+    fetch.set_defaults(func=cmd_fetch_entsoe)
 
     train = sub.add_parser("train", help="train and save the risk model")
     train.set_defaults(func=cmd_train)

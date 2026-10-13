@@ -16,6 +16,7 @@ dependencies = [
 
 [project.optional-dependencies]
 test = ["pytest>=8"]
+entsoe = ["entsoe-py>=0.8"]
 
 [project.scripts]
 grid-congestion = "grid_congestion.cli:main"
