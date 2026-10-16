@@ -87,3 +87,16 @@ def test_fetch_forecasts_sums_onshore_and_offshore_wind():
     assert result["wind_forecast_mw"].tolist() == [300.0, 320.0]
     assert result["solar_forecast_mw"].tolist() == [0.0, 50.0]
     assert result["load_forecast_mw"].tolist() == [1000.0, 1100.0]
+
+
+def test_fetch_sdac_merges_the_repeated_hour_on_the_autumn_clock_change():
+    index = pd.date_range("2025-10-26 00:00", periods=25, freq="1h", tz="Europe/Amsterdam")
+    price = pd.Series(range(25), index=index, dtype=float)
+    position = pd.Series(100.0, index=index)
+    client = StubClient(price, position, None, None)
+
+    result = entsoe_source.fetch_sdac(client, _local("2025-10-26"), _local("2025-10-27"))
+
+    assert len(result) == 24
+    assert not result.duplicated(schemas.MARKET_KEY).any()
+    assert result.loc[result["hour"] == 2, "price_eur_mwh"].item() == 2.5

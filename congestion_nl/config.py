@@ -4,6 +4,8 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
+import pandas as pd
+
 from .estimator import Settings
 
 DEFAULT_CONFIG = Path(__file__).resolve().parents[1] / "config.toml"
@@ -13,16 +15,28 @@ DEFAULT_CONFIG = Path(__file__).resolve().parents[1] / "config.toml"
 class Paths:
     sdac: Path
     forecasts: Path
-    outages: Path | None
     gopacs: Path
+    postcodes: Path
+    places: Path
+    csc_report: Path
+    manual_locations: Path
+    locations: Path
     model_dir: Path
     predictions: Path
     validation: Path
 
 
 @dataclass(frozen=True)
+class Grid:
+    cell_degrees: float
+    start_date: pd.Timestamp
+    directions: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class Features:
     history_days: int
+    long_history_days: int
     event_lag_days: int
     price_lag_days: int
 
@@ -42,7 +56,7 @@ class Validation:
 class Config:
     root: Path
     paths: Paths
-    areas: tuple[str, ...]
+    grid: Grid
     features: Features
     labels: Labels
     model: Settings
@@ -59,22 +73,15 @@ def load_config(path: str | Path = DEFAULT_CONFIG) -> Config:
     with path.open("rb") as handle:
         raw = tomllib.load(handle)
 
-    root = path.parent
-    paths = raw["paths"]
-    outages = paths.get("outages") or None
-
+    grid = raw["grid"]
     return Config(
-        root=root,
-        paths=Paths(
-            sdac=Path(paths["sdac"]),
-            forecasts=Path(paths["forecasts"]),
-            outages=Path(outages) if outages else None,
-            gopacs=Path(paths["gopacs"]),
-            model_dir=Path(paths["model_dir"]),
-            predictions=Path(paths["predictions"]),
-            validation=Path(paths["validation"]),
+        root=path.parent,
+        paths=Paths(**{name: Path(value) for name, value in raw["paths"].items()}),
+        grid=Grid(
+            cell_degrees=float(grid["cell_degrees"]),
+            start_date=pd.Timestamp(grid["start_date"]),
+            directions=tuple(grid["directions"]),
         ),
-        areas=tuple(raw["areas"]["codes"]),
         features=Features(**raw["features"]),
         labels=Labels(**raw["labels"]),
         model=Settings(**raw["model"]),

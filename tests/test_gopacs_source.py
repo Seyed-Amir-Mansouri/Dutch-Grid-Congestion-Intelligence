@@ -3,7 +3,7 @@ import pandas as pd
 from congestion_nl import gopacs_source, schemas
 
 
-def _announcement(id_, type_, sell=None, buy=None, start_ms=None, end_ms=None):
+def _announcement(id_, type_, sell=None, buy=None, start_ms=None, end_ms=None, zips=None):
     """Build one raw announcement record as the API would return it."""
     period = None
     if start_ms is not None:
@@ -11,8 +11,11 @@ def _announcement(id_, type_, sell=None, buy=None, start_ms=None, end_ms=None):
     return {
         "id": id_,
         "type": type_,
+        "organisationName": "Enexis",
         "requestAreaDescriptionSellOrders": sell,
         "requestAreaDescriptionBuyOrders": buy,
+        "requiredProblemProfileInMW": [0.5, 1.5],
+        "congestedZipCodes": zips or [],
         "problemPeriod": period,
     }
 
@@ -65,6 +68,7 @@ def test_to_events_takes_the_named_side_when_sell_is_specific():
     ]
     result = gopacs_source.to_events(records)
     assert result["area"].tolist() == ["LIMM Congestie11_P"]
+    assert result["direction"].tolist() == ["offtake"]
 
 
 def test_to_events_takes_the_named_side_when_buy_is_specific():
@@ -77,13 +81,14 @@ def test_to_events_takes_the_named_side_when_buy_is_specific():
     ]
     result = gopacs_source.to_events(records)
     assert result["area"].tolist() == ["GLTK Congestie3_P"]
+    assert result["direction"].tolist() == ["feed-in"]
 
 
 def test_to_events_drops_records_with_no_named_area():
     start_ms, end_ms = _window()
     records = [
         _announcement(
-            "a", "CONGESTIONMANAGEMENT", sell="all", buy="all",
+            "a", "CONGESTIONMANAGEMENT", sell="all", buy="Outside of Helden, Panningen",
             start_ms=start_ms, end_ms=end_ms,
         ),
     ]
@@ -96,7 +101,7 @@ def test_to_events_splits_multiple_named_areas():
     records = [
         _announcement(
             "a", "CONGESTIONMANAGEMENT", sell="Area1; Area2 ",
-            start_ms=start_ms, end_ms=end_ms,
+            start_ms=start_ms, end_ms=end_ms, zips=["6211AA", "6212BB"],
         ),
     ]
     result = gopacs_source.to_events(records)
@@ -104,6 +109,8 @@ def test_to_events_splits_multiple_named_areas():
     assert (result["event_id"] == "a").all()
     assert result["start_time"].iloc[0] == pd.Timestamp("2026-01-01 13:00")
     assert result["end_time"].iloc[0] == pd.Timestamp("2026-01-01 13:15")
+    assert result["postcodes"].iloc[0] == "6211AA;6212BB"
+    assert result["mw"].iloc[0] == 1.5
 
 
 def test_to_events_deduplicates_areas_named_on_both_sides():

@@ -71,6 +71,32 @@ def cmd_fetch_gopacs(args: argparse.Namespace) -> None:
     print(f"gopacs: {path} ({len(events)} rows from {len(records)} announcements)")
 
 
+def cmd_locate(args: argparse.Namespace) -> None:
+    """Place every GOPACS area on the map and assign it a grid cell."""
+    from . import ingest, locations
+
+    config = load_config(args.config)
+    paths = config.paths
+    events = ingest.load_gopacs(config.resolve(paths.gopacs))
+    located = locations.locate_areas(
+        events,
+        locations.load_postcodes(config.resolve(paths.postcodes)),
+        locations.load_places(config.resolve(paths.places)),
+        locations.load_station_codes(config.resolve(paths.csc_report)),
+        locations.load_manual(config.resolve(paths.manual_locations)),
+        config.grid.cell_degrees,
+    )
+    path = config.resolve(paths.locations)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    located.to_csv(path, index=False)
+
+    placed = events["area"].isin(located["area"]).mean()
+    print(f"locations: {path} ({len(located)} areas in {located['cell'].nunique()} cells)")
+    print(f"events placed: {placed:.1%}")
+    for source, count in located["source"].value_counts().items():
+        print(f"  {source}: {count} areas")
+
+
 def cmd_train(args: argparse.Namespace) -> None:
     """Build the dataset from history and save a trained model."""
     config = load_config(args.config)
@@ -141,6 +167,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     fetch_gopacs = sub.add_parser("fetch-gopacs", help="fetch congestion events from GOPACS")
     fetch_gopacs.set_defaults(func=cmd_fetch_gopacs)
+
+    locate = sub.add_parser("locate", help="place GOPACS areas in grid cells")
+    locate.set_defaults(func=cmd_locate)
 
     train = sub.add_parser("train", help="train and save the risk model")
     train.set_defaults(func=cmd_train)

@@ -21,6 +21,8 @@ class Settings:
     learning_rate: float
     max_iter: int
     max_leaf_nodes: int
+    min_samples_leaf: int
+    l2_regularization: float
     random_state: int
 
 
@@ -30,6 +32,8 @@ def _estimator(settings: Settings) -> HistGradientBoostingClassifier:
         learning_rate=settings.learning_rate,
         max_iter=settings.max_iter,
         max_leaf_nodes=settings.max_leaf_nodes,
+        min_samples_leaf=settings.min_samples_leaf,
+        l2_regularization=settings.l2_regularization,
         random_state=settings.random_state,
     )
 

@@ -1,18 +1,24 @@
 [paths]
 sdac = "data/raw/sdac_results.csv"
 forecasts = "data/raw/system_forecasts.csv"
-outages = "data/raw/planned_outages.csv"
 gopacs = "data/raw/gopacs_events.csv"
+postcodes = "data/raw/geonames/postcodes.zip"
+places = "data/raw/geonames/places.zip"
+csc_report = "data/raw/CSC_public_report_2026-10-01-0925.xlsx"
+manual_locations = "reference/manual_locations.csv"
+locations = "data/processed/area_locations.csv"
 model_dir = "models"
 predictions = "outputs/predictions.csv"
 validation = "outputs/validation_history.csv"
 
-# placeholder congestion-area codes, replace with real GOPACS location codes
-[areas]
-codes = ["NL1", "NL2", "NL3", "NL4", "NL5"]
+[grid]
+cell_degrees = 0.25
+start_date = "2024-01-01"
+directions = ["feed-in", "offtake"]
 
 [features]
 history_days = 7
+long_history_days = 28
 event_lag_days = 2
 price_lag_days = 1
 
@@ -20,11 +26,13 @@ price_lag_days = 1
 settle_days = 1
 
 [model]
-test_days = 60
+test_days = 90
 threshold = 0.5
-learning_rate = 0.05
+learning_rate = 0.03
 max_iter = 300
 max_leaf_nodes = 31
+min_samples_leaf = 1000
+l2_regularization = 5.0
 random_state = 42
 
 [validation]

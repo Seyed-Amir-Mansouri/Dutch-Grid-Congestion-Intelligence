@@ -49,7 +49,7 @@ def test_predict_day_matches_schema_and_threshold(trained, config):
     predictions = pipeline.predict_day(config, bundle, dataset, day, issued)
 
     assert list(predictions.columns) == schemas.PREDICTION_COLUMNS
-    assert len(predictions) == len(config.areas) * 24
+    assert len(predictions) == len(inputs.cells) * 24
     assert predictions["risk_probability"].between(0, 1).all()
     expected_flag = (predictions["risk_probability"] >= bundle["threshold"]).astype(int)
     assert (predictions["risk_flag"] == expected_flag).all()
@@ -79,7 +79,7 @@ def test_validation_uses_latest_prediction_and_settled_days(trained, config):
     ledger["issued_at"] = pd.to_datetime(ledger["issued_at"], utc=True)
 
     settled = validate.latest_predictions(ledger, pd.Timestamp("2025-07-25"))
-    assert len(settled) == len(config.areas) * 24
+    assert len(settled) == len(inputs.cells) * 24
     assert (settled["issued_at"] == pd.Timestamp("2025-07-24 12:00", tz="UTC")).all()
 
     unsettled = validate.latest_predictions(ledger, pd.Timestamp("2025-07-24"))
@@ -115,4 +115,4 @@ def test_evaluate_flags_low_skill(trained, config):
         pd.Timestamp("2025-07-26"),
     )
     assert result["alert"] is True
-    assert result["window_n"] == len(config.areas) * 24
+    assert result["window_n"] == len(inputs.cells) * 24

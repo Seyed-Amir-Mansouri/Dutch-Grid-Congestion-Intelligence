@@ -7,27 +7,32 @@ import pandas as pd
 
 from . import estimator, ingest, schemas
 from .config import Config
-from .features import FEATURE_COLUMNS, build_dataset
+from .features import FEATURE_COLUMNS, build_dataset, cell_table
 
 
 @dataclass(frozen=True)
 class Inputs:
     sdac: pd.DataFrame
     forecasts: pd.DataFrame
-    outages: pd.DataFrame | None
     events: pd.DataFrame
+    cells: pd.DataFrame
+
+
+def located_events(config: Config, events: pd.DataFrame, locations: pd.DataFrame) -> pd.DataFrame:
+    """Attach a cell to each event and keep the configured directions."""
+    events = events[events["direction"].isin(config.grid.directions)]
+    return events.merge(locations[["area", "cell"]], on="area", how="inner")
 
 
 def load_inputs(config: Config) -> Inputs:
     """Read every configured input file."""
-    areas = config.areas
+    locations = ingest.load_locations(config.resolve(config.paths.locations))
+    events = ingest.load_gopacs(config.resolve(config.paths.gopacs))
     return Inputs(
         sdac=ingest.load_sdac(config.resolve(config.paths.sdac)),
         forecasts=ingest.load_forecasts(config.resolve(config.paths.forecasts)),
-        outages=ingest.load_outages(
-            config.resolve(config.paths.outages) if config.paths.outages else None, areas
-        ),
-        events=ingest.load_gopacs(config.resolve(config.paths.gopacs), areas),
+        events=located_events(config, events, locations),
+        cells=cell_table(locations, config.grid.cell_degrees),
     )
 
 
@@ -39,19 +44,12 @@ def label_cutoff(config: Config, today: pd.Timestamp | None = None) -> pd.Timest
 
 
 def build(config: Config, inputs: Inputs, label_end: pd.Timestamp | None) -> pd.DataFrame:
-    """Build the feature table for every key present in the inputs."""
-    return build_dataset(
-        config,
-        inputs.sdac,
-        inputs.forecasts,
-        inputs.outages,
-        inputs.events,
-        label_end,
-    )
+    """Build the feature table for every cell and hour present in the inputs."""
+    return build_dataset(config, inputs.sdac, inputs.forecasts, inputs.events, inputs.cells, label_end)
 
 
 def train(config: Config, dataset: pd.DataFrame) -> tuple[dict, dict]:
-    """Train the Dutch classifier on the labelled rows of a dataset."""
+    """Train the classifier on the labelled rows of a dataset."""
     return estimator.train(dataset, FEATURE_COLUMNS, config.model)
 
 

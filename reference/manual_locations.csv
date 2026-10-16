@@ -1,0 +1,32 @@
+area,lat,lon,evidence
+SS DAMWOUDE 10-1i,53.290,5.999,Damwoude is the Dutch name of Damwald (Dantumadiel); OpenStreetMap
+Schielandweg Invoeding,51.977,4.623,Schielandweg industrial road in Nieuwerkerk aan den IJssel (Stedin area); a second Schielandweg lies in Waddinxveen; low confidence
+OS ULKESLUIS 10-1i,52.800,4.950,Liander substation Ulkesluis in Hollands Kroon (Wieringermeer); Liander pre-announcement of 2024-10-17 and Hollands Kroon council document
+SS Twijzelerheide10-1i,53.242,6.046,Twijzelerheide (Achtkarspelen); OpenStreetMap
+SS Het Hop 10kV,53.180,5.824,Het Hop district of Leeuwarden; OpenStreetMap
+EHVW Congestie8_P,51.440,5.450,Enexis code read as Eindhoven West; cell-level accuracy only
+EHVW Congestie2_P,51.440,5.450,Enexis code read as Eindhoven West; cell-level accuracy only
+AMLU Congestie_P,52.357,6.662,Enexis code with prefix AML read as Almelo; cell-level accuracy only
+AMLM Congestie3_P,52.357,6.662,Enexis code with prefix AML read as Almelo; cell-level accuracy only
+BXT Congestie1_P,51.590,5.330,Enexis code read as Boxtel; cell-level accuracy only
+HGLW Congestie2_P,52.266,6.793,Enexis code with prefix HGL read as Hengelo; cell-level accuracy only
+Cartesiusstraat(TR1/TR2/TR3-10),52.142,5.387,Cartesiusstraat in Amersfoort (Stedin area); OpenStreetMap
+Noordring 50 kV,51.600,4.050,CSC report names Noordring (Schouwen-Duiveland en Tholen) under stations Kruiningen and Goes de Poel; midpoint of both islands
+RS Waalsprong WLS 10-1,51.879,5.847,Waalsprong is Nijmegen-Noord; OpenStreetMap
+Vijzelstraat,52.365,4.893,Vijzelstraat in Amsterdam centre (Liander area); OpenStreetMap
+Walcheren Noord invoeding,51.530,3.600,CSC report lists Walcheren Noord under station Middelburg 150
+Merwedekanaal 01 Reus 50,52.080,5.100,Same Stedin station as Utrecht Merwedekanaal
+871688600008168276 Groendalseweg 44,52.022,4.519,Groendalseweg 44 in Bleiswijk; OpenStreetMap
+Groningen,,,TenneT province-wide request; excluded
+Friesland,,,TenneT province-wide request; excluded
+Drenthe,,,TenneT province-wide request; excluded
+Overijssel,,,TenneT province-wide request; excluded
+Flevoland (ten zuiden Ketelmeer),,,TenneT province-wide request; excluded
+Flevoland (ten noorden Ketelmeer),,,TenneT province-wide request; excluded
+Gelderland,,,TenneT province-wide request; excluded
+Utrecht,,,TenneT province-wide request; excluded
+Noord-Holland,,,TenneT province-wide request; excluded
+Zuid-Holland,,,TenneT province-wide request; excluded
+Zeeland,,,TenneT province-wide request; excluded
+Brabant,,,TenneT province-wide request; excluded
+Limburg on all voltage levels,,,TenneT province-wide request; excluded

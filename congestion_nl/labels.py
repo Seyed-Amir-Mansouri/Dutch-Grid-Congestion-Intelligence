@@ -1,19 +1,29 @@
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 
 from . import schemas
 
 
 def expand_events(events: pd.DataFrame) -> pd.DataFrame:
-    """Return one row per congested clock hour for each event."""
-    rows = []
-    for event in events.itertuples(index=False):
-        first = event.start_time.floor("h")
-        last = (event.end_time - pd.Timedelta(seconds=1)).floor("h")
-        for stamp in pd.date_range(first, last, freq="h"):
-            rows.append((stamp.normalize(), stamp.hour, event.area))
-    frame = pd.DataFrame(rows, columns=schemas.KEY)
+    """Return one row per congested clock hour and cell for each event."""
+    if events.empty:
+        return pd.DataFrame(columns=schemas.KEY + ["congested"])
+    first = events["start_time"].dt.floor("h")
+    last = (events["end_time"] - pd.Timedelta(seconds=1)).dt.floor("h")
+    hours = ((last - first) / pd.Timedelta(hours=1)).astype(int) + 1
+    stamps = np.repeat(first.to_numpy(), hours) + pd.to_timedelta(
+        np.concatenate([np.arange(n) for n in hours]), unit="h"
+    )
+    stamps = pd.DatetimeIndex(stamps)
+    frame = pd.DataFrame(
+        {
+            "delivery_date": stamps.normalize(),
+            "hour": stamps.hour,
+            "cell": np.repeat(events["cell"].to_numpy(), hours),
+        }
+    )
     frame["congested"] = 1
     return frame.drop_duplicates(subset=schemas.KEY).reset_index(drop=True)
 

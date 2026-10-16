@@ -3,18 +3,23 @@ from __future__ import annotations
 import json
 import urllib.request
 
+import numpy as np
 import pandas as pd
 
 from . import schemas
 
 BASE_URL = "https://idcons.gopacs-services.eu/public/announcements"
 PAGE_SIZE = 5000
+PLACEHOLDERS = ("all", "all area", "all other areas", "on all voltage levels")
+# "Buiten" and "Alle gebieden buiten" mean "outside" and "all areas outside"
+NEGATIONS = ("buiten ", "outside ", "alle gebieden buiten")
+SIDES = (("requestAreaDescriptionBuyOrders", "feed-in"), ("requestAreaDescriptionSellOrders", "offtake"))
 
 
 def _fetch_page(page: int, size: int) -> dict:
     """Fetch one page of the public announcements endpoint."""
     url = f"{BASE_URL}?page={page}&size={size}"
-    with urllib.request.urlopen(url, timeout=30) as response:
+    with urllib.request.urlopen(url, timeout=60) as response:
         return json.load(response)
 
 
@@ -40,26 +45,18 @@ def _to_local(epoch_ms: int) -> pd.Timestamp:
 def _is_named_area(segment: str) -> bool:
     """Return False for placeholders such as "all other areas" or "Buiten <area>"."""
     text = segment.strip().lower()
-    if not text or text in ("all", "all other areas"):
+    if not text or text in PLACEHOLDERS:
         return False
-    # "Buiten" is Dutch for "outside"
-    return not text.startswith("buiten ")
+    return not text.startswith(NEGATIONS)
 
 
-def _named_areas(record: dict) -> list[str]:
-    """Return the unique real area names from the buy and sell sides."""
-    segments = []
-    for field in ("requestAreaDescriptionSellOrders", "requestAreaDescriptionBuyOrders"):
-        segments.extend((record.get(field) or "").split(";"))
-    named = [s.strip() for s in segments if _is_named_area(s)]
-    seen: dict[str, None] = {}
-    for area in named:
-        seen.setdefault(area, None)
-    return list(seen)
+def _named_areas(value: str | None) -> list[str]:
+    """Return the real area names listed on one side of an announcement."""
+    return [s.strip() for s in (value or "").split(";") if _is_named_area(s)]
 
 
 def to_events(records: list[dict]) -> pd.DataFrame:
-    """Keep congestion-management announcements and expand multi-area rows."""
+    """Keep congestion-management announcements as one row per named area."""
     rows = []
     for record in records:
         period = record.get("problemPeriod")
@@ -67,6 +64,11 @@ def to_events(records: list[dict]) -> pd.DataFrame:
             continue
         start = _to_local(period["startTime"])
         end = _to_local(period["endTime"])
-        for area in _named_areas(record):
-            rows.append((record["id"], area, start, end))
-    return pd.DataFrame(rows, columns=schemas.GOPACS_COLUMNS)
+        profile = record.get("requiredProblemProfileInMW") or []
+        mw = max(profile) if profile else np.nan
+        postcodes = ";".join(record.get("congestedZipCodes") or [])
+        for field, direction in SIDES:
+            for area in _named_areas(record.get(field)):
+                rows.append((record["id"], area, direction, record.get("organisationName"), postcodes, mw, start, end))
+    frame = pd.DataFrame(rows, columns=schemas.GOPACS_COLUMNS)
+    return frame.drop_duplicates(subset=["event_id", "area"]).reset_index(drop=True)

@@ -15,7 +15,8 @@ def hourly_mean(series: pd.Series, column: str, end: pd.Timestamp) -> pd.DataFra
     frame = frame.rename(columns={frame.columns[0]: "timestamp"})
     frame["delivery_date"] = frame["timestamp"].dt.normalize().dt.tz_localize(None)
     frame["hour"] = frame["timestamp"].dt.hour
-    return frame[schemas.MARKET_KEY + [column]]
+    # the repeated hour on the autumn clock change is averaged into one row
+    return frame.groupby(schemas.MARKET_KEY, as_index=False)[column].mean()
 
 
 def build_client(api_key: str):
