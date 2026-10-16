@@ -1,5 +1,3 @@
-"""Turn GOPACS event intervals into hourly congestion labels."""
-
 from __future__ import annotations
 
 import pandas as pd

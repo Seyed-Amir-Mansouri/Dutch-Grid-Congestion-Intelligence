@@ -1,11 +1,10 @@
-"""Tests for lagged features and the absence of look-ahead."""
-
 import numpy as np
 import pandas as pd
 
-from grid_congestion import pipeline
-from grid_congestion.features import build_dataset, lagged_rolling
-from grid_congestion.synthetic import generate
+from congestion_nl import pipeline
+from congestion_nl.features import build_dataset
+from congestion_nl.rolling import lagged_rolling
+from congestion_nl.synthetic import generate
 
 
 def _series_frame(values, area="NL1", hour=0):

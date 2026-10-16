@@ -1,10 +1,12 @@
-"""Typed project configuration read from config.toml."""
-
 from __future__ import annotations
 
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
+
+from .estimator import Settings
+
+DEFAULT_CONFIG = Path(__file__).resolve().parents[1] / "config.toml"
 
 
 @dataclass(frozen=True)
@@ -31,16 +33,6 @@ class Labels:
 
 
 @dataclass(frozen=True)
-class Model:
-    test_days: int
-    threshold: float
-    learning_rate: float
-    max_iter: int
-    max_leaf_nodes: int
-    random_state: int
-
-
-@dataclass(frozen=True)
 class Validation:
     window_days: int
     min_skill: float
@@ -53,7 +45,7 @@ class Config:
     areas: tuple[str, ...]
     features: Features
     labels: Labels
-    model: Model
+    model: Settings
     validation: Validation
 
     def resolve(self, path: Path) -> Path:
@@ -61,7 +53,7 @@ class Config:
         return path if path.is_absolute() else self.root / path
 
 
-def load_config(path: str | Path = "config.toml") -> Config:
+def load_config(path: str | Path = DEFAULT_CONFIG) -> Config:
     """Parse a TOML config file into a Config object."""
     path = Path(path).resolve()
     with path.open("rb") as handle:
@@ -85,6 +77,6 @@ def load_config(path: str | Path = "config.toml") -> Config:
         areas=tuple(raw["areas"]["codes"]),
         features=Features(**raw["features"]),
         labels=Labels(**raw["labels"]),
-        model=Model(**raw["model"]),
+        model=Settings(**raw["model"]),
         validation=Validation(**raw["validation"]),
     )

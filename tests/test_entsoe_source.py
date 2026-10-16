@@ -1,12 +1,9 @@
-"""Tests for the ENTSO-E fetch and hourly conversion, using a stub client."""
-
 import pandas as pd
 
-from grid_congestion import entsoe_source, schemas
+from congestion_nl import entsoe_source, schemas
 
 
 class StubClient:
-    """Mimics the subset of EntsoePandasClient used by entsoe_source."""
 
     def __init__(self, price, position, load, renewables):
         self.price = price

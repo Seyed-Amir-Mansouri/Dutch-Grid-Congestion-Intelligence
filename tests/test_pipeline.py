@@ -1,5 +1,3 @@
-"""End-to-end tests from synthetic inputs through training, prediction and validation."""
-
 import dataclasses
 from datetime import datetime, timezone
 
@@ -7,8 +5,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from grid_congestion import model, pipeline, schemas, validate
-from grid_congestion.synthetic import generate
+from congestion_nl import estimator, pipeline, schemas, validate
+from congestion_nl.synthetic import generate
 
 
 @pytest.fixture
@@ -18,7 +16,7 @@ def trained(config):
     inputs = pipeline.load_inputs(config)
     label_end = pd.Timestamp("2025-07-19")
     dataset = pipeline.build(config, inputs, label_end)
-    bundle, report = model.train(config, dataset)
+    bundle, report = pipeline.train(config, dataset)
     return inputs, dataset, bundle, report
 
 
@@ -35,11 +33,11 @@ def test_training_reports_holdout_scores(trained):
 def test_model_round_trip_keeps_predictions(trained, config, tmp_path):
     """A saved and reloaded model gives identical probabilities."""
     _, dataset, bundle, _ = trained
-    path = model.save(bundle, tmp_path / "models")
+    path = estimator.save(bundle, tmp_path / "models")
     assert path.exists()
-    reloaded = model.load(tmp_path / "models")
+    reloaded = estimator.load(tmp_path / "models")
     rows = dataset.head(50)
-    assert np.allclose(model.predict(bundle, rows), model.predict(reloaded, rows))
+    assert np.allclose(estimator.predict(bundle, rows), estimator.predict(reloaded, rows))
 
 
 def test_predict_day_matches_schema_and_threshold(trained, config):

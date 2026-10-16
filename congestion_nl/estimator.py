@@ -1,7 +1,6 @@
-"""Training, persistence and inference for the congestion risk classifier."""
-
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -11,15 +10,22 @@ import pandas as pd
 from sklearn.ensemble import HistGradientBoostingClassifier
 
 from . import metrics
-from .config import Config
-from .features import FEATURE_COLUMNS
 
 MODEL_FILE = "congestion_model.joblib"
 
 
-def _estimator(config: Config) -> HistGradientBoostingClassifier:
+@dataclass(frozen=True)
+class Settings:
+    test_days: int
+    threshold: float
+    learning_rate: float
+    max_iter: int
+    max_leaf_nodes: int
+    random_state: int
+
+
+def _estimator(settings: Settings) -> HistGradientBoostingClassifier:
     """Build an untrained classifier from the model settings."""
-    settings = config.model
     return HistGradientBoostingClassifier(
         learning_rate=settings.learning_rate,
         max_iter=settings.max_iter,
@@ -28,31 +34,28 @@ def _estimator(config: Config) -> HistGradientBoostingClassifier:
     )
 
 
-def train(config: Config, dataset: pd.DataFrame) -> tuple[dict, dict]:
+def train(dataset: pd.DataFrame, features: list[str], settings: Settings) -> tuple[dict, dict]:
     """Fit on history, score the most recent days, then refit on all labels."""
     labelled = dataset[dataset["target"].notna()].reset_index(drop=True)
     if labelled.empty:
         raise ValueError("No labelled rows available for training")
 
-    cutoff = labelled["delivery_date"].max() - pd.Timedelta(days=config.model.test_days)
+    cutoff = labelled["delivery_date"].max() - pd.Timedelta(days=settings.test_days)
     fit_part = labelled[labelled["delivery_date"] <= cutoff]
     test_part = labelled[labelled["delivery_date"] > cutoff]
 
     report = {"train_rows": int(len(fit_part)), "test_rows": int(len(test_part))}
     if len(fit_part) and len(test_part):
-        holdout = _estimator(config).fit(fit_part[FEATURE_COLUMNS], fit_part["target"])
-        probability = holdout.predict_proba(test_part[FEATURE_COLUMNS])[:, 1]
-        report["holdout"] = metrics.score(
-            test_part["target"], probability, config.model.threshold
-        )
+        holdout = _estimator(settings).fit(fit_part[features], fit_part["target"])
+        probability = holdout.predict_proba(test_part[features])[:, 1]
+        report["holdout"] = metrics.score(test_part["target"], probability, settings.threshold)
 
-    estimator = _estimator(config).fit(labelled[FEATURE_COLUMNS], labelled["target"])
+    estimator = _estimator(settings).fit(labelled[features], labelled["target"])
     trained_at = datetime.now(timezone.utc)
     bundle = {
         "estimator": estimator,
-        "features": FEATURE_COLUMNS,
-        "areas": list(config.areas),
-        "threshold": config.model.threshold,
+        "features": list(features),
+        "threshold": settings.threshold,
         "model_version": f"hgb-{trained_at:%Y%m%dT%H%M%SZ}",
         "trained_at": trained_at.isoformat(),
     }

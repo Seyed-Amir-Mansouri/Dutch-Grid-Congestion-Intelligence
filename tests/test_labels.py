@@ -1,9 +1,7 @@
-"""Tests for turning GOPACS intervals into hourly labels."""
-
 import pandas as pd
 
-from grid_congestion import schemas
-from grid_congestion.labels import expand_events, label_grid
+from congestion_nl import schemas
+from congestion_nl.labels import expand_events, label_grid
 
 
 def _events(rows):

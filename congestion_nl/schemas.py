@@ -1,5 +1,3 @@
-"""Required columns for each input file."""
-
 MARKET_KEY = ["delivery_date", "hour"]
 
 KEY = ["delivery_date", "hour", "area"]

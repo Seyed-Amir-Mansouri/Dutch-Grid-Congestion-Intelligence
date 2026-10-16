@@ -1,5 +1,3 @@
-"""Generate synthetic input files in the expected schema for demos and tests."""
-
 from __future__ import annotations
 
 from pathlib import Path

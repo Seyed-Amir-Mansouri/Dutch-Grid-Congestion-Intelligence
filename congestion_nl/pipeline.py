@@ -1,5 +1,3 @@
-"""End-to-end steps that load inputs, build datasets and issue daily predictions."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -7,9 +5,9 @@ from datetime import datetime, timezone
 
 import pandas as pd
 
-from . import ingest, model, schemas
+from . import estimator, ingest, schemas
 from .config import Config
-from .features import build_dataset
+from .features import FEATURE_COLUMNS, build_dataset
 
 
 @dataclass(frozen=True)
@@ -52,6 +50,11 @@ def build(config: Config, inputs: Inputs, label_end: pd.Timestamp | None) -> pd.
     )
 
 
+def train(config: Config, dataset: pd.DataFrame) -> tuple[dict, dict]:
+    """Train the Dutch classifier on the labelled rows of a dataset."""
+    return estimator.train(dataset, FEATURE_COLUMNS, config.model)
+
+
 def predict_day(
     config: Config,
     bundle: dict,
@@ -65,14 +68,8 @@ def predict_day(
         raise ValueError(f"No inputs found for delivery date {day:%Y-%m-%d}")
 
     issued_at = issued_at or datetime.now(timezone.utc)
-    rows["risk_probability"] = model.predict(bundle, rows)
+    rows["risk_probability"] = estimator.predict(bundle, rows)
     rows["risk_flag"] = (rows["risk_probability"] >= bundle["threshold"]).astype(int)
     rows["issued_at"] = issued_at.isoformat()
     rows["model_version"] = bundle["model_version"]
     return rows[schemas.PREDICTION_COLUMNS].reset_index(drop=True)
-
-
-def append_ledger(predictions: pd.DataFrame, path) -> None:
-    """Append predictions to the ledger CSV, writing the header only once."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    predictions.to_csv(path, mode="a", header=not path.exists(), index=False)

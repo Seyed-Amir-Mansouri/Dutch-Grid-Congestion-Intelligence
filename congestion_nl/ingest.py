@@ -1,5 +1,3 @@
-"""Loaders that read and validate the raw input CSV files."""
-
 from __future__ import annotations
 
 from pathlib import Path

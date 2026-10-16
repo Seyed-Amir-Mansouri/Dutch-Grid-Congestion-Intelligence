@@ -1,5 +1,3 @@
-"""Command line entry point for the congestion framework."""
-
 from __future__ import annotations
 
 import argparse
@@ -10,8 +8,8 @@ from datetime import datetime, timezone
 
 import pandas as pd
 
-from . import model, pipeline, synthetic, validate
-from .config import load_config
+from . import estimator, ledger, pipeline, synthetic, validate
+from .config import DEFAULT_CONFIG, load_config
 
 
 def _timestamp(text: str) -> pd.Timestamp:
@@ -59,13 +57,27 @@ def cmd_fetch_entsoe(args: argparse.Namespace) -> None:
     print(f"forecasts: {forecasts_path} ({len(forecasts)} rows)")
 
 
+def cmd_fetch_gopacs(args: argparse.Namespace) -> None:
+    """Fetch historical congestion-management announcements from GOPACS."""
+    from . import gopacs_source
+
+    config = load_config(args.config)
+    records = gopacs_source.fetch_announcements()
+    events = gopacs_source.to_events(records)
+
+    path = config.resolve(config.paths.gopacs)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    events.to_csv(path, index=False)
+    print(f"gopacs: {path} ({len(events)} rows from {len(records)} announcements)")
+
+
 def cmd_train(args: argparse.Namespace) -> None:
     """Build the dataset from history and save a trained model."""
     config = load_config(args.config)
     inputs = pipeline.load_inputs(config)
     dataset = pipeline.build(config, inputs, pipeline.label_cutoff(config))
-    bundle, report = model.train(config, dataset)
-    path = model.save(bundle, config.resolve(config.paths.model_dir))
+    bundle, report = pipeline.train(config, dataset)
+    path = estimator.save(bundle, config.resolve(config.paths.model_dir))
     print(json.dumps(report, indent=2, default=str))
     print(f"saved: {path}")
 
@@ -73,7 +85,7 @@ def cmd_train(args: argparse.Namespace) -> None:
 def cmd_predict(args: argparse.Namespace) -> None:
     """Issue risk predictions for one delivery day and log them."""
     config = load_config(args.config)
-    bundle = model.load(config.resolve(config.paths.model_dir))
+    bundle = estimator.load(config.resolve(config.paths.model_dir))
     inputs = pipeline.load_inputs(config)
     dataset = pipeline.build(config, inputs, None)
 
@@ -84,12 +96,12 @@ def cmd_predict(args: argparse.Namespace) -> None:
     issued_at = datetime.fromisoformat(args.issued_at) if args.issued_at else None
     predictions = pipeline.predict_day(config, bundle, dataset, day, issued_at)
 
-    ledger = config.resolve(config.paths.predictions)
-    pipeline.append_ledger(predictions, ledger)
+    ledger_path = config.resolve(config.paths.predictions)
+    ledger.append(predictions, ledger_path)
     flagged = int(predictions["risk_flag"].sum())
     threshold = bundle["threshold"]
     print(f"{len(predictions)} rows for {day:%Y-%m-%d}, {flagged} flagged at threshold {threshold}")
-    print(f"logged: {ledger}")
+    print(f"logged: {ledger_path}")
 
 
 def cmd_validate(args: argparse.Namespace) -> None:
@@ -98,10 +110,10 @@ def cmd_validate(args: argparse.Namespace) -> None:
     as_of = _timestamp(args.as_of) if args.as_of else _today()
     label_end = as_of - pd.Timedelta(days=config.labels.settle_days)
 
-    ledger = validate.load_ledger(config.resolve(config.paths.predictions))
+    predictions = ledger.load(config.resolve(config.paths.predictions))
     inputs = pipeline.load_inputs(config)
-    result = validate.evaluate(config, ledger, inputs.events, label_end, as_of)
-    history = validate.append_history(result, config.resolve(config.paths.validation))
+    result = validate.evaluate(config, predictions, inputs.events, label_end, as_of)
+    history = ledger.append_history(result, config.resolve(config.paths.validation))
 
     print(json.dumps(result, indent=2, default=str))
     print(f"history rows: {len(history)}")
@@ -112,8 +124,8 @@ def cmd_validate(args: argparse.Namespace) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     """Create the argument parser with one subcommand per workflow step."""
-    parser = argparse.ArgumentParser(prog="grid-congestion")
-    parser.add_argument("--config", default="config.toml", help="path to config.toml")
+    parser = argparse.ArgumentParser(prog="congestion-nl")
+    parser.add_argument("--config", default=str(DEFAULT_CONFIG), help="path to config.toml")
     sub = parser.add_subparsers(dest="command", required=True)
 
     demo = sub.add_parser("demo", help="write synthetic input files")
@@ -126,6 +138,9 @@ def build_parser() -> argparse.ArgumentParser:
     fetch.add_argument("--start", required=True, help="start date YYYY-MM-DD")
     fetch.add_argument("--end", required=True, help="end date YYYY-MM-DD")
     fetch.set_defaults(func=cmd_fetch_entsoe)
+
+    fetch_gopacs = sub.add_parser("fetch-gopacs", help="fetch congestion events from GOPACS")
+    fetch_gopacs.set_defaults(func=cmd_fetch_gopacs)
 
     train = sub.add_parser("train", help="train and save the risk model")
     train.set_defaults(func=cmd_train)

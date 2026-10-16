@@ -1,5 +1,3 @@
-"""Scoring functions for probabilistic congestion forecasts."""
-
 from __future__ import annotations
 
 import numpy as np
