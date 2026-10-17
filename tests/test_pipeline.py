@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from congestion_nl import estimator, pipeline, schemas, validate
+from congestion_nl import estimator, metrics, pipeline, schemas, validate
 from congestion_nl.synthetic import generate
 
 
@@ -116,3 +116,19 @@ def test_evaluate_flags_low_skill(trained, config):
     )
     assert result["alert"] is True
     assert result["window_n"] == len(inputs.cells) * 24
+
+
+def test_choose_threshold_reaches_target_precision():
+    """The chosen threshold is the lowest one that reaches the target precision."""
+    y = np.array([0, 0, 1, 0, 1, 1])
+    p = np.array([0.1, 0.2, 0.3, 0.4, 0.6, 0.8])
+    assert metrics.choose_threshold(y, p, 0.6, 0.5) == 0.2
+    assert metrics.choose_threshold(y, p, 1.0, 0.5) == 0.6
+    assert metrics.choose_threshold(np.zeros(6), p, 0.6, 0.5) == 0.5
+
+
+def test_training_reports_chosen_threshold(trained):
+    """The bundle keeps the threshold picked on the most recent window."""
+    _, _, bundle, report = trained
+    assert report["threshold"] == bundle["threshold"]
+    assert 0.0 < bundle["threshold"] <= 1.0

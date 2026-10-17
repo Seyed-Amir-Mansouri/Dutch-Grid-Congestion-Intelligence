@@ -25,11 +25,10 @@ def evaluate(
     latest = latest_predictions(predictions, label_end)
     labelled = latest.merge(label_grid(latest[schemas.KEY], events), on=schemas.KEY, how="left")
 
-    threshold = config.model.threshold
     window_start = label_end - pd.Timedelta(days=config.validation.window_days - 1)
     recent = labelled[labelled["delivery_date"] >= window_start]
-    overall = metrics.score(labelled["congested"], labelled["risk_probability"], threshold)
-    window = metrics.score(recent["congested"], recent["risk_probability"], threshold)
+    overall = metrics.score(labelled["congested"], labelled["risk_probability"], flag=labelled["risk_flag"])
+    window = metrics.score(recent["congested"], recent["risk_probability"], flag=recent["risk_flag"])
 
     skill = window["skill"]
     alert = bool(pd.notna(skill) and skill < config.validation.min_skill)

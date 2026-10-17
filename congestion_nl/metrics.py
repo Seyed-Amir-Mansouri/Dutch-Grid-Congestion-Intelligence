@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import numpy as np
-from sklearn.metrics import brier_score_loss, roc_auc_score
+from sklearn.metrics import brier_score_loss, precision_recall_curve, roc_auc_score
 
 
-def score(y_true: np.ndarray, probability: np.ndarray, threshold: float) -> dict:
-    """Return Brier, skill against climatology, AUC and flag precision and recall."""
+def score(y_true: np.ndarray, probability: np.ndarray, threshold: float = 0.5, flag: np.ndarray | None = None) -> dict:
+    """Return Brier, skill, AUC, and precision and recall of the given flags or of the threshold."""
     y_true = np.asarray(y_true, dtype=int)
     probability = np.asarray(probability, dtype=float)
-    flag = probability >= threshold
+    flag = probability >= threshold if flag is None else np.asarray(flag, dtype=bool)
     positive_rate = y_true.mean() if len(y_true) else np.nan
 
     brier = brier_score_loss(y_true, probability) if len(y_true) else np.nan
@@ -33,3 +33,15 @@ def score(y_true: np.ndarray, probability: np.ndarray, threshold: float) -> dict
         "precision": float(precision),
         "recall": float(recall),
     }
+
+
+def choose_threshold(y_true: np.ndarray, probability: np.ndarray, target_precision: float, fallback: float) -> float:
+    """Return the lowest threshold whose precision reaches the target, or the fallback if none does."""
+    y_true = np.asarray(y_true, dtype=int)
+    if y_true.sum() == 0:
+        return fallback
+    precision, _, thresholds = precision_recall_curve(y_true, probability)
+    reached = np.flatnonzero(precision[:-1] >= target_precision)
+    if not len(reached):
+        return fallback
+    return float(thresholds[reached[0]])

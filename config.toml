@@ -28,6 +28,7 @@ settle_days = 1
 [model]
 test_days = 90
 threshold = 0.5
+target_precision = 0.8
 learning_rate = 0.03
 max_iter = 300
 max_leaf_nodes = 31

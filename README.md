@@ -18,7 +18,7 @@ This estimator predicts, for each delivery hour and 0.25° grid cell of the Neth
    - the national day-ahead price, net position, forecasts and residual load (load minus wind and solar)
    - the price history for the same hour
    - how often that cell, and that hour in that cell, had a request over the last 7 and 28 days, lagged by two days
-5. **Predict.** A gradient-boosted classifier gives a probability per row. The predictions go to a ledger with their issue time and model version.
+5. **Predict.** A gradient-boosted classifier gives a probability per row. A row is flagged when its probability reaches the model's threshold. Training picks that threshold as the lowest one whose precision on the most recent window reaches `target_precision`, so the flag trades recall for fewer false alarms. The predictions go to a ledger with their issue time, model version and flag.
 6. **Validate.** Once a day has settled, each logged prediction is joined to the requests that came. The validation step computes Brier score, skill against the base rate, ROC AUC, precision and recall, over the full history and over a recent window. If recent skill falls below the configured minimum, the command exits with status 2.
 
 ## Layout
@@ -107,7 +107,7 @@ congestion-nl demo --start 2025-01-01 --days 400
 - `[grid]` sets the cell size in degrees, the first delivery date used, and which request directions count as congestion.
 - `[features]` sets the short and long history windows in days, the lag on price history and the lag on request history. The request lag is two days, so requests for the day before delivery are never used.
 - `[labels]` sets how many days after a delivery date the GOPACS record is treated as complete.
-- `[model]` sets the holdout length, the decision threshold and the boosting parameters.
+- `[model]` sets the holdout length, the target precision for the flag, the fallback threshold used when that target cannot be reached, and the boosting parameters. The holdout score uses a threshold picked on the window before the holdout, so the holdout never informs its own threshold.
 - `[validation]` sets the recent window length and the minimum acceptable skill.
 
 ## Notes on the design
