@@ -18,7 +18,7 @@ This estimator predicts, for each delivery hour and 0.25° grid cell of the Neth
    - the national day-ahead price, net position, forecasts and residual load (load minus wind and solar)
    - the price history for the same hour
    - how often that cell, and that hour in that cell, had a request over the last 7 and 28 days, lagged by two days
-5. **Predict.** A gradient-boosted classifier gives a probability per row. A row is flagged when its probability reaches the model's threshold. Training picks that threshold as the lowest one whose precision on the most recent window reaches `target_precision`, so the flag trades recall for fewer false alarms. The predictions go to a ledger with their issue time, model version and flag.
+5. **Predict.** A gradient-boosted classifier gives a probability per row. The raw probability is calibrated with a logistic fit on the log-odds (Platt scaling), learned on the most recent window, so a forecast of 30% comes true about 30% of the time. A row is flagged when its probability reaches the model's threshold. Training picks that threshold as the lowest one whose precision on the most recent window reaches `target_precision`, so the flag trades recall for fewer false alarms. The predictions go to a ledger with their issue time, model version and flag.
 6. **Validate.** Once a day has settled, each logged prediction is joined to the requests that came. The validation step computes Brier score, skill against the base rate, ROC AUC, precision and recall, over the full history and over a recent window. If recent skill falls below the configured minimum, the command exits with status 2.
 
 ## Layout

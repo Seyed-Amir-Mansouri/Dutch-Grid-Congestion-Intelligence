@@ -132,3 +132,14 @@ def test_training_reports_chosen_threshold(trained):
     _, _, bundle, report = trained
     assert report["threshold"] == bundle["threshold"]
     assert 0.0 < bundle["threshold"] <= 1.0
+
+
+def test_calibrator_keeps_the_ranking(trained):
+    """Calibration changes probabilities but not their order."""
+    _, dataset, bundle, _ = trained
+    assert bundle["calibrator"] is not None
+    rows = dataset.head(500)
+    raw = bundle["estimator"].predict_proba(rows[bundle["features"]])[:, 1]
+    calibrated = estimator.predict(bundle, rows)
+    order = np.argsort(raw, kind="stable")
+    assert np.all(np.diff(calibrated[order]) >= -1e-12)

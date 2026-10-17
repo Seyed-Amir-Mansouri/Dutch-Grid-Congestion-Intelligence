@@ -8,6 +8,7 @@ import joblib
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import HistGradientBoostingClassifier
+from sklearn.linear_model import LogisticRegression
 
 from . import metrics
 
@@ -45,14 +46,30 @@ def _split(labelled: pd.DataFrame, days: int) -> tuple[pd.DataFrame, pd.DataFram
     return labelled[labelled["delivery_date"] <= cutoff], labelled[labelled["delivery_date"] > cutoff]
 
 
+def _logit(probability: np.ndarray) -> np.ndarray:
+    """Return the log-odds of probabilities as a one-column matrix."""
+    clipped = np.clip(probability, 1e-6, 1 - 1e-6)
+    return np.log(clipped / (1 - clipped)).reshape(-1, 1)
+
+
+def calibrate(calibrator: LogisticRegression | None, probability: np.ndarray) -> np.ndarray:
+    """Map raw model probabilities through the calibrator, if there is one."""
+    if calibrator is None:
+        return probability
+    return calibrator.predict_proba(_logit(probability))[:, 1]
+
+
 def _fit_threshold(fit_part: pd.DataFrame, check_part: pd.DataFrame, features: list[str], settings: Settings):
-    """Fit on one part and pick the flag threshold on the later part."""
+    """Fit on one part, then fit the calibrator and pick the flag threshold on the later part."""
     model = _estimator(settings).fit(fit_part[features], fit_part["target"])
-    probability = model.predict_proba(check_part[features])[:, 1]
+    raw = model.predict_proba(check_part[features])[:, 1]
+    calibrator = None
+    if check_part["target"].nunique() == 2:
+        calibrator = LogisticRegression().fit(_logit(raw), check_part["target"])
     threshold = metrics.choose_threshold(
-        check_part["target"], probability, settings.target_precision, settings.threshold
+        check_part["target"], calibrate(calibrator, raw), settings.target_precision, settings.threshold
     )
-    return model, threshold
+    return model, calibrator, threshold
 
 
 def train(dataset: pd.DataFrame, features: list[str], settings: Settings) -> tuple[dict, dict]:
@@ -63,21 +80,22 @@ def train(dataset: pd.DataFrame, features: list[str], settings: Settings) -> tup
 
     fit_part, test_part = _split(labelled, settings.test_days)
     report = {"train_rows": int(len(fit_part)), "test_rows": int(len(test_part))}
-    threshold = settings.threshold
+    threshold, calibrator = settings.threshold, None
     if len(fit_part) and len(test_part):
         early, tune = _split(fit_part, settings.test_days)
         if len(early) and len(tune):
-            _, tuned = _fit_threshold(early, tune, features, settings)
+            _, tuned_calibrator, tuned = _fit_threshold(early, tune, features, settings)
             holdout = _estimator(settings).fit(fit_part[features], fit_part["target"])
-            probability = holdout.predict_proba(test_part[features])[:, 1]
+            probability = calibrate(tuned_calibrator, holdout.predict_proba(test_part[features])[:, 1])
             report["holdout_threshold"] = tuned
             report["holdout"] = metrics.score(test_part["target"], probability, tuned)
-        _, threshold = _fit_threshold(fit_part, test_part, features, settings)
+        _, calibrator, threshold = _fit_threshold(fit_part, test_part, features, settings)
 
     estimator = _estimator(settings).fit(labelled[features], labelled["target"])
     trained_at = datetime.now(timezone.utc)
     bundle = {
         "estimator": estimator,
+        "calibrator": calibrator,
         "features": list(features),
         "threshold": threshold,
         "model_version": f"hgb-{trained_at:%Y%m%dT%H%M%SZ}",
@@ -105,5 +123,6 @@ def load(model_dir: Path) -> dict:
 
 
 def predict(bundle: dict, dataset: pd.DataFrame) -> np.ndarray:
-    """Return congestion probabilities for each feature row."""
-    return bundle["estimator"].predict_proba(dataset[bundle["features"]])[:, 1]
+    """Return calibrated congestion probabilities for each feature row."""
+    raw = bundle["estimator"].predict_proba(dataset[bundle["features"]])[:, 1]
+    return calibrate(bundle.get("calibrator"), raw)
