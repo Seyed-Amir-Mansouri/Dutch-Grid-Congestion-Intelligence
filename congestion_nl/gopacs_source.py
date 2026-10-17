@@ -67,8 +67,10 @@ def to_events(records: list[dict]) -> pd.DataFrame:
         profile = record.get("requiredProblemProfileInMW") or []
         mw = max(profile) if profile else np.nan
         postcodes = ";".join(record.get("congestedZipCodes") or [])
+        created = record.get("createdTimestamp")
+        announced = _to_local(created) if created else pd.NaT
         for field, direction in SIDES:
             for area in _named_areas(record.get(field)):
-                rows.append((record["id"], area, direction, record.get("organisationName"), postcodes, mw, start, end))
+                rows.append((record["id"], area, direction, record.get("organisationName"), postcodes, mw, start, end, announced))
     frame = pd.DataFrame(rows, columns=schemas.GOPACS_COLUMNS)
     return frame.drop_duplicates(subset=["event_id", "area"]).reset_index(drop=True)

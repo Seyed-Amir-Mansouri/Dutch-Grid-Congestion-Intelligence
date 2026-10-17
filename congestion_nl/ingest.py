@@ -40,6 +40,7 @@ def load_gopacs(path: Path) -> pd.DataFrame:
     frame = _read_csv(path, schemas.GOPACS_COLUMNS)
     frame["start_time"] = pd.to_datetime(frame["start_time"])
     frame["end_time"] = pd.to_datetime(frame["end_time"])
+    frame["announced_at"] = pd.to_datetime(frame["announced_at"])
     frame["area"] = frame["area"].astype(str)
     frame = frame[frame["end_time"] > frame["start_time"]]
     return frame.sort_values("start_time").reset_index(drop=True)

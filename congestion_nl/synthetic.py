@@ -44,6 +44,7 @@ def _runs_to_events(frame: pd.DataFrame) -> pd.DataFrame:
     out["operator"] = "Synthetic"
     out["postcodes"] = ""
     out["mw"] = 1.0
+    out["announced_at"] = out["start_time"] - pd.Timedelta(hours=24)
     return out[schemas.GOPACS_COLUMNS]
 
 

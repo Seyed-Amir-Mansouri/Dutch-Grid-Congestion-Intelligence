@@ -17,6 +17,7 @@ def _announcement(id_, type_, sell=None, buy=None, start_ms=None, end_ms=None, z
         "requiredProblemProfileInMW": [0.5, 1.5],
         "congestedZipCodes": zips or [],
         "problemPeriod": period,
+        "createdTimestamp": start_ms - 3_600_000 if start_ms else None,
     }
 
 
@@ -111,6 +112,7 @@ def test_to_events_splits_multiple_named_areas():
     assert result["end_time"].iloc[0] == pd.Timestamp("2026-01-01 13:15")
     assert result["postcodes"].iloc[0] == "6211AA;6212BB"
     assert result["mw"].iloc[0] == 1.5
+    assert result["announced_at"].iloc[0] == pd.Timestamp("2026-01-01 12:00")
 
 
 def test_to_events_deduplicates_areas_named_on_both_sides():

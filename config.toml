@@ -21,6 +21,7 @@ history_days = 7
 long_history_days = 28
 event_lag_days = 2
 price_lag_days = 1
+issue_hour = 14
 
 [labels]
 settle_days = 1

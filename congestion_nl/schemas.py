@@ -6,7 +6,7 @@ SDAC_COLUMNS = MARKET_KEY + ["price_eur_mwh", "net_position_mw"]
 
 FORECAST_COLUMNS = MARKET_KEY + ["load_forecast_mw", "wind_forecast_mw", "solar_forecast_mw"]
 
-GOPACS_COLUMNS = ["event_id", "area", "direction", "operator", "postcodes", "mw", "start_time", "end_time"]
+GOPACS_COLUMNS = ["event_id", "area", "direction", "operator", "postcodes", "mw", "start_time", "end_time", "announced_at"]
 
 LOCATION_COLUMNS = ["area", "lat", "lon", "cell", "source"]
 

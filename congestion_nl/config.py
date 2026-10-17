@@ -39,6 +39,7 @@ class Features:
     long_history_days: int
     event_lag_days: int
     price_lag_days: int
+    issue_hour: int
 
 
 @dataclass(frozen=True)

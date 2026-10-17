@@ -6,10 +6,10 @@ import pandas as pd
 from . import schemas
 
 
-def expand_events(events: pd.DataFrame) -> pd.DataFrame:
-    """Return one row per congested clock hour and cell for each event."""
+def expand_hours(events: pd.DataFrame, keep: list[str]) -> pd.DataFrame:
+    """Return one row per event, clock hour and cell, carrying the listed event columns."""
     if events.empty:
-        return pd.DataFrame(columns=schemas.KEY + ["congested"])
+        return pd.DataFrame(columns=schemas.KEY + keep)
     first = events["start_time"].dt.floor("h")
     last = (events["end_time"] - pd.Timedelta(seconds=1)).dt.floor("h")
     hours = ((last - first) / pd.Timedelta(hours=1)).astype(int) + 1
@@ -17,13 +17,19 @@ def expand_events(events: pd.DataFrame) -> pd.DataFrame:
         np.concatenate([np.arange(n) for n in hours]), unit="h"
     )
     stamps = pd.DatetimeIndex(stamps)
-    frame = pd.DataFrame(
+    return pd.DataFrame(
         {
             "delivery_date": stamps.normalize(),
             "hour": stamps.hour,
             "cell": np.repeat(events["cell"].to_numpy(), hours),
+            **{column: np.repeat(events[column].to_numpy(), hours) for column in keep},
         }
     )
+
+
+def expand_events(events: pd.DataFrame) -> pd.DataFrame:
+    """Return one row per congested clock hour and cell for each event."""
+    frame = expand_hours(events, [])
     frame["congested"] = 1
     return frame.drop_duplicates(subset=schemas.KEY).reset_index(drop=True)
 

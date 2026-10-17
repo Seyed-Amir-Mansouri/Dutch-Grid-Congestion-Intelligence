@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 from congestion_nl import pipeline
-from congestion_nl.features import build_dataset
+from congestion_nl.features import FEATURE_COLUMNS, build_dataset
 from congestion_nl.rolling import lagged_rolling
 from congestion_nl.synthetic import generate
 
@@ -16,16 +16,23 @@ def _series_frame(values, cell=CELL, hour=0):
     return pd.DataFrame({"delivery_date": dates, "cell": cell, "hour": hour, "value": values})
 
 
-def _extra_event(event_id, cell, start, end):
+def _extra_event(event_id, cell, start, end, announced=None):
     """Build a single located GOPACS event frame."""
     return pd.DataFrame(
         {
             "event_id": [event_id],
             "cell": [cell],
+            "mw": [2.0],
             "start_time": pd.to_datetime([start]),
             "end_time": pd.to_datetime([end]),
+            "announced_at": pd.to_datetime([announced or start]),
         }
     )
+
+
+def _day(frame, day, cell=CELL):
+    """Return one cell's rows for one delivery day, ordered by hour."""
+    return frame[(frame["delivery_date"] == day) & (frame["cell"] == cell)].sort_values("hour")
 
 
 def _build(config, inputs, events, label_end=None):
@@ -92,3 +99,45 @@ def test_target_is_masked_after_label_end(config):
     dataset = _build(config, inputs, inputs.events, label_end)
     assert dataset.loc[dataset["delivery_date"] > label_end, "target"].isna().all()
     assert dataset.loc[dataset["delivery_date"] <= label_end, "target"].notna().all()
+
+
+def test_request_announced_after_issue_does_not_change_features(config):
+    """A request for day t announced after the issue time leaves the features for day t unchanged."""
+    generate(config, start="2025-01-01", days=20, seed=3)
+    inputs = pipeline.load_inputs(config)
+    day = pd.Timestamp("2025-01-15")
+
+    base = _build(config, inputs, inputs.events)
+    extra = _extra_event("X3", CELL, "2025-01-15 10:00", "2025-01-15 14:00", "2025-01-14 15:00")
+    changed = _build(config, inputs, pd.concat([inputs.events, extra]))
+    before, after = _day(base, day), _day(changed, day)
+    for column in FEATURE_COLUMNS:
+        assert np.allclose(before[column].fillna(-1), after[column].fillna(-1)), column
+
+
+def test_request_announced_before_issue_is_a_feature(config):
+    """A request for day t announced before the issue time marks its hours on day t."""
+    generate(config, start="2025-01-01", days=20, seed=3)
+    inputs = pipeline.load_inputs(config)
+    day = pd.Timestamp("2025-01-15")
+
+    extra = _extra_event("X4", CELL, "2025-01-15 10:00", "2025-01-15 14:00", "2025-01-14 09:00")
+    changed = _build(config, inputs, pd.concat([inputs.events, extra]))
+    after = _day(changed, day)
+    assert (after.loc[after["hour"].between(10, 13), "hour_announced"] == 1).all()
+    assert (after["announced_hours"] >= 4).all()
+
+
+def test_yesterday_request_counts_once_announced(config):
+    """A request on day t minus one that was announced in time feeds the next day's history."""
+    generate(config, start="2025-01-01", days=20, seed=3)
+    inputs = pipeline.load_inputs(config)
+    day = pd.Timestamp("2025-01-15")
+    events = inputs.events[inputs.events["cell"] != CELL]
+
+    extra = _extra_event("X5", CELL, "2025-01-14 10:00", "2025-01-14 13:00", "2025-01-14 08:00")
+    after = _day(_build(config, inputs, pd.concat([events, extra])), day)
+    assert (after["known_hours_yesterday"] == 3).all()
+    assert (after["run_days"] == 1).all()
+    assert (after["days_since_request"] == 1).all()
+    assert (after["mw_hist"] == 2.0).all()

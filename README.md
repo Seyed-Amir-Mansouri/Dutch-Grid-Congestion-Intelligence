@@ -18,6 +18,10 @@ This estimator predicts, for each delivery hour and 0.25° grid cell of the Neth
    - the national day-ahead price, net position, forecasts and residual load (load minus wind and solar)
    - the price history for the same hour
    - how often that cell, and that hour in that cell, had a request over the last 7 and 28 days, lagged by two days
+   - the requests already announced at the issue time, 14:00 the day before delivery (`issue_hour`): whether the hour is covered, and how many hours of the day are
+   - for the day before delivery and earlier, only what was announced by the issue time of the following day: yesterday's request hours, the run of days with requests, days since the last request, and the requested MW over the last 7 days
+
+   GOPACS gives each announcement a creation time, which is what makes the announced-request features possible. The period of an announcement can still be changed after it is created, and only the final period is published, so these features can be slightly optimistic.
 5. **Predict.** A gradient-boosted classifier gives a probability per row. The raw probability is calibrated with a logistic fit on the log-odds (Platt scaling), learned on the most recent window, so a forecast of 30% comes true about 30% of the time. A row is flagged when its probability reaches the model's threshold. Training picks that threshold as the lowest one whose precision on the most recent window reaches `target_precision`, so the flag trades recall for fewer false alarms. The predictions go to a ledger with their issue time, model version and flag.
 6. **Validate.** Once a day has settled, each logged prediction is joined to the requests that came. The validation step computes Brier score, skill against the base rate, ROC AUC, precision and recall, over the full history and over a recent window. If recent skill falls below the configured minimum, the command exits with status 2.
 
@@ -105,7 +109,7 @@ congestion-nl demo --start 2025-01-01 --days 400
 ## Configuration
 
 - `[grid]` sets the cell size in degrees, the first delivery date used, and which request directions count as congestion.
-- `[features]` sets the short and long history windows in days, the lag on price history and the lag on request history. The request lag is two days, so requests for the day before delivery are never used.
+- `[features]` sets the short and long history windows in days, the lag on price history, the lag on the full request history, and the hour on the day before delivery at which forecasts are issued. The full request history is lagged two days. Newer requests are used only if they were announced before the issue time. Set `issue_hour` to the hour you actually run `predict`, because the features assume everything announced before it is known.
 - `[labels]` sets how many days after a delivery date the GOPACS record is treated as complete.
 - `[model]` sets the holdout length, the target precision for the flag, the fallback threshold used when that target cannot be reached, and the boosting parameters. The holdout score uses a threshold picked on the window before the holdout, so the holdout never informs its own threshold.
 - `[validation]` sets the recent window length and the minimum acceptable skill.
