@@ -13,11 +13,13 @@ from sklearn.linear_model import LogisticRegression
 from . import metrics
 
 MODEL_FILE = "congestion_model.joblib"
+LABEL_GAP_DAYS = 2
 
 
 @dataclass(frozen=True)
 class Settings:
     test_days: int
+    threshold_days: int
     threshold: float
     target_precision: float
     learning_rate: float
@@ -72,28 +74,15 @@ def _fit_threshold(fit_part: pd.DataFrame, check_part: pd.DataFrame, features: l
     return model, calibrator, threshold
 
 
-def train(dataset: pd.DataFrame, features: list[str], settings: Settings) -> tuple[dict, dict]:
-    """Pick the threshold on a validation window, score the holdout, then refit on all labels."""
-    labelled = dataset[dataset["target"].notna()].reset_index(drop=True)
-    if labelled.empty:
-        raise ValueError("No labelled rows available for training")
-
-    fit_part, test_part = _split(labelled, settings.test_days)
-    report = {"train_rows": int(len(fit_part)), "test_rows": int(len(test_part))}
+def fit_bundle(labelled: pd.DataFrame, features: list[str], settings: Settings) -> dict:
+    """Pick the threshold and calibration on the most recent window, then fit on all given labels."""
     threshold, calibrator = settings.threshold, None
-    if len(fit_part) and len(test_part):
-        early, tune = _split(fit_part, settings.test_days)
-        if len(early) and len(tune):
-            _, tuned_calibrator, tuned = _fit_threshold(early, tune, features, settings)
-            holdout = _estimator(settings).fit(fit_part[features], fit_part["target"])
-            probability = calibrate(tuned_calibrator, holdout.predict_proba(test_part[features])[:, 1])
-            report["holdout_threshold"] = tuned
-            report["holdout"] = metrics.score(test_part["target"], probability, tuned)
-        _, calibrator, threshold = _fit_threshold(fit_part, test_part, features, settings)
-
+    early, recent = _split(labelled, settings.threshold_days)
+    if len(early) and len(recent):
+        _, calibrator, threshold = _fit_threshold(early, recent, features, settings)
     estimator = _estimator(settings).fit(labelled[features], labelled["target"])
     trained_at = datetime.now(timezone.utc)
-    bundle = {
+    return {
         "estimator": estimator,
         "calibrator": calibrator,
         "features": list(features),
@@ -101,7 +90,43 @@ def train(dataset: pd.DataFrame, features: list[str], settings: Settings) -> tup
         "model_version": f"hgb-{trained_at:%Y%m%dT%H%M%SZ}",
         "trained_at": trained_at.isoformat(),
     }
-    report["threshold"] = threshold
+
+
+def backtest(labelled: pd.DataFrame, features: list[str], settings: Settings, days: int) -> pd.DataFrame:
+    """Forecast each of the last given days with a model trained only on labels known at its issue time."""
+    dates = sorted(labelled["delivery_date"].unique())[-days:]
+    parts = []
+    for day in dates:
+        # at 14:00 on the day before delivery, the last complete day of requests is two days before
+        known = labelled[labelled["delivery_date"] <= day - pd.Timedelta(days=LABEL_GAP_DAYS)]
+        if known.empty or known["target"].nunique() < 2:
+            continue
+        bundle = fit_bundle(known, features, settings)
+        rows = labelled[labelled["delivery_date"] == day].copy()
+        rows["risk_probability"] = predict(bundle, rows)
+        rows["threshold"] = bundle["threshold"]
+        rows["risk_flag"] = (rows["risk_probability"] >= bundle["threshold"]).astype(int)
+        parts.append(rows)
+    return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
+
+
+def train(dataset: pd.DataFrame, features: list[str], settings: Settings) -> tuple[dict, dict]:
+    """Score a rolling daily backtest over the last test days, then fit the final model on all labels."""
+    labelled = dataset[dataset["target"].notna()].reset_index(drop=True)
+    if labelled.empty:
+        raise ValueError("No labelled rows available for training")
+
+    report = {"train_rows": int(len(labelled))}
+    results = backtest(labelled, features, settings, settings.test_days)
+    if len(results):
+        report["holdout"] = metrics.score(results["target"], results["risk_probability"], flag=results["risk_flag"])
+        report["holdout_days"] = [
+            {"date": str(day.date()), "threshold": float(g["threshold"].iloc[0]), **metrics.score(g["target"], g["risk_probability"], flag=g["risk_flag"])}
+            for day, g in results.groupby("delivery_date")
+        ]
+
+    bundle = fit_bundle(labelled, features, settings)
+    report["threshold"] = bundle["threshold"]
     report["model_version"] = bundle["model_version"]
     return bundle, report
 

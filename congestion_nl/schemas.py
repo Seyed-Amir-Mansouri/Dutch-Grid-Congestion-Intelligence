@@ -1,6 +1,6 @@
-MARKET_KEY = ["delivery_date", "hour"]
+MARKET_KEY = ["delivery_date", "quarter"]
 
-KEY = ["delivery_date", "hour", "cell"]
+KEY = ["delivery_date", "quarter", "area"]
 
 SDAC_COLUMNS = MARKET_KEY + ["price_eur_mwh", "net_position_mw"]
 

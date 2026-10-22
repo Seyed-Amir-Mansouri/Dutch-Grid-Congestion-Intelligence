@@ -7,7 +7,7 @@ import pandas as pd
 
 from . import estimator, ingest, schemas
 from .config import Config
-from .features import FEATURE_COLUMNS, build_dataset, cell_table
+from .features import FEATURE_COLUMNS, area_table, build_dataset
 
 
 @dataclass(frozen=True)
@@ -15,7 +15,7 @@ class Inputs:
     sdac: pd.DataFrame
     forecasts: pd.DataFrame
     events: pd.DataFrame
-    cells: pd.DataFrame
+    areas: pd.DataFrame
 
 
 def located_events(config: Config, events: pd.DataFrame, locations: pd.DataFrame) -> pd.DataFrame:
@@ -28,11 +28,12 @@ def load_inputs(config: Config) -> Inputs:
     """Read every configured input file."""
     locations = ingest.load_locations(config.resolve(config.paths.locations))
     events = ingest.load_gopacs(config.resolve(config.paths.gopacs))
+    events = located_events(config, events, locations)
     return Inputs(
         sdac=ingest.load_sdac(config.resolve(config.paths.sdac)),
         forecasts=ingest.load_forecasts(config.resolve(config.paths.forecasts)),
-        events=located_events(config, events, locations),
-        cells=cell_table(locations, config.grid.cell_degrees),
+        events=events,
+        areas=area_table(locations, events),
     )
 
 
@@ -44,8 +45,8 @@ def label_cutoff(config: Config, today: pd.Timestamp | None = None) -> pd.Timest
 
 
 def build(config: Config, inputs: Inputs, label_end: pd.Timestamp | None) -> pd.DataFrame:
-    """Build the feature table for every cell and hour present in the inputs."""
-    return build_dataset(config, inputs.sdac, inputs.forecasts, inputs.events, inputs.cells, label_end)
+    """Build the feature table for every active area and quarter-hour present in the inputs."""
+    return build_dataset(config, inputs.sdac, inputs.forecasts, inputs.events, inputs.areas, label_end)
 
 
 def train(config: Config, dataset: pd.DataFrame) -> tuple[dict, dict]:

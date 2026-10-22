@@ -19,25 +19,26 @@ AREAS = {
 
 
 def _national_grid(start: pd.Timestamp, days: int) -> pd.DataFrame:
-    """Return every delivery date and hour combination."""
+    """Return every delivery date and quarter-hour combination."""
     dates = pd.date_range(start, periods=days, freq="D")
-    return pd.MultiIndex.from_product([dates, range(24)], names=schemas.MARKET_KEY).to_frame(index=False)
+    return pd.MultiIndex.from_product([dates, range(96)], names=schemas.MARKET_KEY).to_frame(index=False)
 
 
 def _runs_to_events(frame: pd.DataFrame) -> pd.DataFrame:
-    """Merge consecutive congested hours per area into event intervals."""
+    """Merge consecutive congested quarter-hours per area into event intervals."""
     congested = frame[frame["congested"] == 1].copy()
-    congested["stamp"] = congested["delivery_date"] + pd.to_timedelta(congested["hour"], unit="h")
+    congested["stamp"] = congested["delivery_date"] + pd.to_timedelta(congested["quarter"] * 15, unit="min")
+    step = pd.Timedelta(minutes=15)
     events = []
     for area, group in congested.sort_values(["area", "stamp"]).groupby("area"):
         stamps = group["stamp"].tolist()
         run_start = previous = stamps[0]
         for stamp in stamps[1:]:
-            if stamp - previous != pd.Timedelta(hours=1):
-                events.append((area, run_start, previous + pd.Timedelta(hours=1)))
+            if stamp - previous != step:
+                events.append((area, run_start, previous + step))
                 run_start = stamp
             previous = stamp
-        events.append((area, run_start, previous + pd.Timedelta(hours=1)))
+        events.append((area, run_start, previous + step))
     out = pd.DataFrame(events, columns=["area", "start_time", "end_time"])
     out.insert(0, "event_id", [f"GOPACS-{i:05d}" for i in range(len(out))])
     out["direction"] = "feed-in"
@@ -52,7 +53,7 @@ def generate(config: Config, start: str, days: int, seed: int = 7) -> dict[str, 
     """Write synthetic SDAC, forecast, GOPACS and location files to the configured paths."""
     rng = np.random.default_rng(seed)
     national = _national_grid(pd.Timestamp(start), days)
-    hour = national["hour"].to_numpy()
+    hour = national["quarter"].to_numpy() / 4
     weekday = national["delivery_date"].dt.weekday.to_numpy()
     n = len(national)
 

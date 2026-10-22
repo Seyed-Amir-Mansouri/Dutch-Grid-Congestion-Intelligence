@@ -6,6 +6,7 @@ import pandas as pd
 import pytest
 
 from congestion_nl import estimator, metrics, pipeline, schemas, validate
+from congestion_nl.features import FEATURE_COLUMNS
 from congestion_nl.synthetic import generate
 
 
@@ -49,7 +50,7 @@ def test_predict_day_matches_schema_and_threshold(trained, config):
     predictions = pipeline.predict_day(config, bundle, dataset, day, issued)
 
     assert list(predictions.columns) == schemas.PREDICTION_COLUMNS
-    assert len(predictions) == len(inputs.cells) * 24
+    assert len(predictions) == (dataset["delivery_date"] == day).sum()
     assert predictions["risk_probability"].between(0, 1).all()
     expected_flag = (predictions["risk_probability"] >= bundle["threshold"]).astype(int)
     assert (predictions["risk_flag"] == expected_flag).all()
@@ -79,7 +80,7 @@ def test_validation_uses_latest_prediction_and_settled_days(trained, config):
     ledger["issued_at"] = pd.to_datetime(ledger["issued_at"], utc=True)
 
     settled = validate.latest_predictions(ledger, pd.Timestamp("2025-07-25"))
-    assert len(settled) == len(inputs.cells) * 24
+    assert len(settled) == len(early)
     assert (settled["issued_at"] == pd.Timestamp("2025-07-24 12:00", tz="UTC")).all()
 
     unsettled = validate.latest_predictions(ledger, pd.Timestamp("2025-07-24"))
@@ -115,7 +116,7 @@ def test_evaluate_flags_low_skill(trained, config):
         pd.Timestamp("2025-07-26"),
     )
     assert result["alert"] is True
-    assert result["window_n"] == len(inputs.cells) * 24
+    assert result["window_n"] == len(ledger)
 
 
 def test_choose_threshold_reaches_target_precision():
@@ -143,3 +144,25 @@ def test_calibrator_keeps_the_ranking(trained):
     calibrated = estimator.predict(bundle, rows)
     order = np.argsort(raw, kind="stable")
     assert np.all(np.diff(calibrated[order]) >= -1e-12)
+
+
+def test_backtest_covers_the_last_days_with_their_own_thresholds(trained, config):
+    """The backtest forecasts each of the last test days and records the threshold it used."""
+    _, dataset, _, report = trained
+    labelled = dataset[dataset["target"].notna()]
+    last = sorted(labelled["delivery_date"].unique())[-config.model.test_days:]
+    assert [pd.Timestamp(d["date"]) for d in report["holdout_days"]] == list(last)
+    assert all(0 < d["threshold"] <= 1 for d in report["holdout_days"])
+
+
+def test_backtest_ignores_labels_not_known_at_issue_time(trained, config):
+    """Changing the labels of the delivery day and the day before leaves that day's forecast unchanged."""
+    _, dataset, _, _ = trained
+    labelled = dataset[dataset["target"].notna()].reset_index(drop=True)
+    last = labelled["delivery_date"].max()
+    base = estimator.backtest(labelled, FEATURE_COLUMNS, config.model, 1)
+    changed = labelled.copy()
+    recent = changed["delivery_date"] >= last - pd.Timedelta(days=1)
+    changed.loc[recent, "target"] = 1 - changed.loc[recent, "target"]
+    after = estimator.backtest(changed, FEATURE_COLUMNS, config.model, 1)
+    assert np.allclose(base["risk_probability"], after["risk_probability"])

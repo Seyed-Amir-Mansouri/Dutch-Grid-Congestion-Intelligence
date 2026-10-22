@@ -1,5 +1,6 @@
 import dataclasses
 
+import pandas as pd
 import pytest
 
 from congestion_nl.config import DEFAULT_CONFIG, load_config
@@ -12,4 +13,5 @@ def config(tmp_path):
     (tmp_path / "config.toml").write_text(text, encoding="utf-8")
     loaded = load_config(tmp_path / "config.toml")
     fast = dataclasses.replace(loaded.model, max_iter=60, min_samples_leaf=20)
-    return dataclasses.replace(loaded, model=fast)
+    grid = dataclasses.replace(loaded.grid, start_date=pd.Timestamp("2025-01-01"))
+    return dataclasses.replace(loaded, model=fast, grid=grid)

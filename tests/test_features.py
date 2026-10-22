@@ -7,43 +7,61 @@ from congestion_nl.rolling import lagged_rolling
 from congestion_nl.synthetic import generate
 
 
-CELL = "53.00N 6.00E"
+AREA = "Area North"
+DAY = pd.Timestamp("2025-01-15")
 
 
-def _series_frame(values, cell=CELL, hour=0):
+def _series_frame(values, quarter=0):
     """Build a one-series daily frame for rolling tests."""
     dates = pd.date_range("2025-01-01", periods=len(values), freq="D")
-    return pd.DataFrame({"delivery_date": dates, "cell": cell, "hour": hour, "value": values})
+    return pd.DataFrame({"delivery_date": dates, "area": AREA, "quarter": quarter, "value": values})
 
 
-def _extra_event(event_id, cell, start, end, announced=None):
-    """Build a single located GOPACS event frame."""
+def _extra_event(event_id, start, end, announced, inputs, area=AREA):
+    """Build a single located GOPACS event frame for one area."""
+    row = inputs.areas.set_index("area").loc[area]
     return pd.DataFrame(
         {
             "event_id": [event_id],
-            "cell": [cell],
+            "area": [area],
+            "direction": ["feed-in"],
+            "operator": [row["operator"]],
+            "cell": [row["cell"]],
             "mw": [2.0],
             "start_time": pd.to_datetime([start]),
             "end_time": pd.to_datetime([end]),
-            "announced_at": pd.to_datetime([announced or start]),
+            "announced_at": pd.to_datetime([announced]),
         }
     )
 
 
-def _day(frame, day, cell=CELL):
-    """Return one cell's rows for one delivery day, ordered by hour."""
-    return frame[(frame["delivery_date"] == day) & (frame["cell"] == cell)].sort_values("hour")
+def _day(frame, day=DAY, area=AREA):
+    """Return one area's rows for one delivery day, ordered by quarter-hour."""
+    return frame[(frame["delivery_date"] == day) & (frame["area"] == area)].sort_values("quarter")
 
 
 def _build(config, inputs, events, label_end=None):
     """Build the dataset from loaded inputs and the given events."""
-    return build_dataset(config, inputs.sdac, inputs.forecasts, events, inputs.cells, label_end)
+    return build_dataset(config, inputs.sdac, inputs.forecasts, events, inputs.areas, label_end)
+
+
+def _same_features(before, after):
+    """Return True when two frames carry identical feature values."""
+    return all(
+        np.allclose(before[c].fillna(-1).to_numpy(float), after[c].fillna(-1).to_numpy(float)) for c in FEATURE_COLUMNS
+    )
+
+
+def _inputs(config):
+    """Generate a short synthetic history and load it."""
+    generate(config, start="2025-01-01", days=20, seed=3)
+    return pipeline.load_inputs(config)
 
 
 def test_lagged_mean_excludes_current_day():
     """A lag of one day excludes the current day from the mean."""
     frame = _series_frame([10.0, 20.0, 30.0, 40.0])
-    result = lagged_rolling(frame, "value", ["cell", "hour"], window=2, lag=1, how="mean")
+    result = lagged_rolling(frame, "value", ["area", "quarter"], window=2, lag=1, how="mean")
     assert np.isnan(result[0])
     assert result[1] == 10.0
     assert result[2] == 15.0
@@ -53,91 +71,64 @@ def test_lagged_mean_excludes_current_day():
 def test_lag_two_uses_only_days_up_to_t_minus_two():
     """A lag of two days uses values up to t minus two only."""
     frame = _series_frame([1.0, 2.0, 4.0, 8.0])
-    result = lagged_rolling(frame, "value", ["cell", "hour"], window=1, lag=2, how="sum")
+    result = lagged_rolling(frame, "value", ["area", "quarter"], window=1, lag=2, how="sum")
     assert np.isnan(result[1])
     assert result[2] == 1.0
     assert result[3] == 2.0
 
 
-def test_event_on_previous_day_does_not_change_features(config):
-    """An event on day t minus one does not affect features for day t."""
-    generate(config, start="2025-01-01", days=20, seed=3)
-    inputs = pipeline.load_inputs(config)
-    target_day = pd.Timestamp("2025-01-15")
-
+def test_request_for_the_delivery_day_is_never_a_feature(config):
+    """A request for day t, even one announced days before, leaves day t's features unchanged."""
+    inputs = _inputs(config)
     base = _build(config, inputs, inputs.events)
-    extra = _extra_event("X1", CELL, "2025-01-14 00:00", "2025-01-14 23:00")
+    extra = _extra_event("X1", "2025-01-15 10:00", "2025-01-15 14:00", "2025-01-12 09:00", inputs)
     changed = _build(config, inputs, pd.concat([inputs.events, extra]))
-
-    columns = ["hour_congested_hist", "congested_hours_hist", "congested_hours_long"]
-    before = base[base["delivery_date"] == target_day].sort_values(["cell", "hour"])
-    after = changed[changed["delivery_date"] == target_day].sort_values(["cell", "hour"])
-    for column in columns:
-        assert np.allclose(before[column].fillna(-1), after[column].fillna(-1))
+    assert _same_features(_day(base), _day(changed))
 
 
-def test_event_two_days_before_changes_features(config):
-    """An event on day t minus two does affect features for day t."""
-    generate(config, start="2025-01-01", days=20, seed=3)
-    inputs = pipeline.load_inputs(config)
-    target_day = pd.Timestamp("2025-01-15")
-
+def test_yesterday_request_announced_after_issue_is_not_a_feature(config):
+    """A request on day t minus one announced after the issue time leaves day t's features unchanged."""
+    inputs = _inputs(config)
     base = _build(config, inputs, inputs.events)
-    extra = _extra_event("X2", CELL, "2025-01-13 00:00", "2025-01-13 23:00")
+    extra = _extra_event("X2", "2025-01-14 20:00", "2025-01-14 21:00", "2025-01-14 15:00", inputs)
     changed = _build(config, inputs, pd.concat([inputs.events, extra]))
+    assert _same_features(_day(base), _day(changed))
 
-    before = base[(base["delivery_date"] == target_day) & (base["cell"] == CELL)]
-    after = changed[(changed["delivery_date"] == target_day) & (changed["cell"] == CELL)]
-    assert after["congested_hours_hist"].sum() > before["congested_hours_hist"].sum()
+
+def test_yesterday_request_counts_once_announced(config):
+    """A request on day t minus one announced before the issue time feeds day t's history."""
+    inputs = _inputs(config)
+    events = inputs.events[inputs.events["area"] != AREA]
+    older = _extra_event("X3", "2025-01-10 10:00", "2025-01-10 10:15", "2025-01-09 09:00", inputs)
+    extra = _extra_event("X4", "2025-01-14 10:00", "2025-01-14 13:00", "2025-01-14 08:00", inputs)
+    after = _day(_build(config, inputs, pd.concat([events, older, extra])))
+    assert (after["area_yesterday"] == 12).all()
+    assert (after["run_days"] == 1).all()
+    assert (after["days_since_request"] == 1).all()
+    assert (after["area_age_days"] == 5).all()
+    assert (after["mw_week"] == 4.0).all()
+    assert (after.loc[after["quarter"] == 40, "area_slot_week"] == 2).all()
+    assert (after.loc[after["quarter"].between(41, 51), "area_slot_week"] == 1).all()
+    assert (after.loc[after["quarter"] == 52, "area_slot_week"] == 0).all()
+
+
+def test_area_without_recent_requests_is_not_forecast(config):
+    """An area drops out once its last known request is older than the active window."""
+    inputs = _inputs(config)
+    events = inputs.events[inputs.events["area"] != AREA]
+    extra = _extra_event("X5", "2025-01-02 10:00", "2025-01-02 11:00", "2025-01-01 09:00", inputs)
+    short = config.features.__class__(**{**config.features.__dict__, "active_days": 5})
+    frame = _build(config.__class__(**{**config.__dict__, "features": short}), inputs, pd.concat([events, extra]))
+    days = frame.loc[frame["area"] == AREA, "delivery_date"].unique()
+    assert pd.Timestamp("2025-01-07") in days
+    assert pd.Timestamp("2025-01-08") not in days
+    assert pd.Timestamp("2025-01-02") not in days
 
 
 def test_target_is_masked_after_label_end(config):
     """Targets are kept up to label_end and empty after it."""
-    generate(config, start="2025-01-01", days=10, seed=3)
-    inputs = pipeline.load_inputs(config)
+    inputs = _inputs(config)
     label_end = pd.Timestamp("2025-01-05")
     dataset = _build(config, inputs, inputs.events, label_end)
     assert dataset.loc[dataset["delivery_date"] > label_end, "target"].isna().all()
     assert dataset.loc[dataset["delivery_date"] <= label_end, "target"].notna().all()
-
-
-def test_request_announced_after_issue_does_not_change_features(config):
-    """A request for day t announced after the issue time leaves the features for day t unchanged."""
-    generate(config, start="2025-01-01", days=20, seed=3)
-    inputs = pipeline.load_inputs(config)
-    day = pd.Timestamp("2025-01-15")
-
-    base = _build(config, inputs, inputs.events)
-    extra = _extra_event("X3", CELL, "2025-01-15 10:00", "2025-01-15 14:00", "2025-01-14 15:00")
-    changed = _build(config, inputs, pd.concat([inputs.events, extra]))
-    before, after = _day(base, day), _day(changed, day)
-    for column in FEATURE_COLUMNS:
-        assert np.allclose(before[column].fillna(-1), after[column].fillna(-1)), column
-
-
-def test_request_announced_before_issue_is_a_feature(config):
-    """A request for day t announced before the issue time marks its hours on day t."""
-    generate(config, start="2025-01-01", days=20, seed=3)
-    inputs = pipeline.load_inputs(config)
-    day = pd.Timestamp("2025-01-15")
-
-    extra = _extra_event("X4", CELL, "2025-01-15 10:00", "2025-01-15 14:00", "2025-01-14 09:00")
-    changed = _build(config, inputs, pd.concat([inputs.events, extra]))
-    after = _day(changed, day)
-    assert (after.loc[after["hour"].between(10, 13), "hour_announced"] == 1).all()
-    assert (after["announced_hours"] >= 4).all()
-
-
-def test_yesterday_request_counts_once_announced(config):
-    """A request on day t minus one that was announced in time feeds the next day's history."""
-    generate(config, start="2025-01-01", days=20, seed=3)
-    inputs = pipeline.load_inputs(config)
-    day = pd.Timestamp("2025-01-15")
-    events = inputs.events[inputs.events["cell"] != CELL]
-
-    extra = _extra_event("X5", CELL, "2025-01-14 10:00", "2025-01-14 13:00", "2025-01-14 08:00")
-    after = _day(_build(config, inputs, pd.concat([events, extra])), day)
-    assert (after["known_hours_yesterday"] == 3).all()
-    assert (after["run_days"] == 1).all()
-    assert (after["days_since_request"] == 1).all()
-    assert (after["mw_hist"] == 2.0).all()

@@ -13,27 +13,28 @@ validation = "outputs/validation_history.csv"
 
 [grid]
 cell_degrees = 0.25
-start_date = "2024-01-01"
+start_date = "2025-10-01"
 directions = ["feed-in", "offtake"]
 
 [features]
 history_days = 7
 long_history_days = 28
-event_lag_days = 2
 price_lag_days = 1
 issue_hour = 14
+active_days = 90
 
 [labels]
 settle_days = 1
 
 [model]
-test_days = 90
+test_days = 3
+threshold_days = 14
 threshold = 0.5
-target_precision = 0.8
+target_precision = 0.6
 learning_rate = 0.03
 max_iter = 300
 max_leaf_nodes = 31
-min_samples_leaf = 1000
+min_samples_leaf = 4000
 l2_regularization = 5.0
 random_state = 42
 

@@ -37,9 +37,9 @@ class Grid:
 class Features:
     history_days: int
     long_history_days: int
-    event_lag_days: int
     price_lag_days: int
     issue_hour: int
+    active_days: int
 
 
 @dataclass(frozen=True)

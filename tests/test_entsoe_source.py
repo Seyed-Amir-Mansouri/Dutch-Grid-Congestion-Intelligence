@@ -43,25 +43,21 @@ def _local(text):
     return pd.Timestamp(text).tz_localize("Europe/Amsterdam")
 
 
-def test_fetch_sdac_resamples_quarter_hour_prices_to_hourly():
-    price_index = _quarter_hour_index("2025-06-01 00:00", 8)
-    price = pd.Series([10, 20, 30, 40, 50, 60, 70, 80], index=price_index)
-    position_index = _hourly_index("2025-06-01 00:00", 2)
-    position = pd.Series([100, 200], index=position_index)
+def test_fetch_sdac_repeats_hourly_values_over_quarters():
+    price = pd.Series([10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0], index=_quarter_hour_index("2025-06-01 00:00", 8))
+    position = pd.Series([100.0, 200.0], index=_hourly_index("2025-06-01 00:00", 2))
     client = StubClient(price, position, None, None)
 
-    result = entsoe_source.fetch_sdac(client, _local("2025-06-01"), _local("2025-06-02"))
+    result = entsoe_source.fetch_sdac(client, _local("2025-06-01"), _local("2025-06-01 02:00"))
 
     assert list(result.columns) == schemas.SDAC_COLUMNS
-    assert result.loc[0, "hour"] == 0
-    assert result.loc[0, "price_eur_mwh"] == 25.0
-    assert result.loc[1, "hour"] == 1
-    assert result.loc[1, "price_eur_mwh"] == 65.0
-    assert result["net_position_mw"].tolist() == [100.0, 200.0]
+    assert result["quarter"].tolist() == list(range(8))
+    assert result["price_eur_mwh"].tolist() == [10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0]
+    assert result["net_position_mw"].tolist() == [100.0] * 4 + [200.0] * 4
 
 
 def test_fetch_sdac_excludes_a_row_exactly_at_the_end_boundary():
-    index = _hourly_index("2025-06-01 00:00", 3)
+    index = _quarter_hour_index("2025-06-01 00:00", 3)
     price = pd.Series([10, 20, 30], index=index)
     position = pd.Series([100, 200], index=index[:2])
     client = StubClient(price, position, None, None)
@@ -73,7 +69,7 @@ def test_fetch_sdac_excludes_a_row_exactly_at_the_end_boundary():
 
 
 def test_fetch_forecasts_sums_onshore_and_offshore_wind():
-    index = _hourly_index("2025-06-01 00:00", 2)
+    index = _quarter_hour_index("2025-06-01 00:00", 2)
     load = pd.DataFrame({"Forecasted Load": [1000.0, 1100.0]}, index=index)
     renewables = pd.DataFrame(
         {"Wind Onshore": [100.0, 110.0], "Wind Offshore": [200.0, 210.0], "Solar": [0.0, 50.0]},
@@ -81,7 +77,7 @@ def test_fetch_forecasts_sums_onshore_and_offshore_wind():
     )
     client = StubClient(None, None, load, renewables)
 
-    result = entsoe_source.fetch_forecasts(client, _local("2025-06-01"), _local("2025-06-02"))
+    result = entsoe_source.fetch_forecasts(client, _local("2025-06-01"), index[-1] + pd.Timedelta(minutes=15))
 
     assert list(result.columns) == schemas.FORECAST_COLUMNS
     assert result["wind_forecast_mw"].tolist() == [300.0, 320.0]
@@ -97,6 +93,6 @@ def test_fetch_sdac_merges_the_repeated_hour_on_the_autumn_clock_change():
 
     result = entsoe_source.fetch_sdac(client, _local("2025-10-26"), _local("2025-10-27"))
 
-    assert len(result) == 24
+    assert len(result) == 96
     assert not result.duplicated(schemas.MARKET_KEY).any()
-    assert result.loc[result["hour"] == 2, "price_eur_mwh"].item() == 2.5
+    assert (result.loc[result["quarter"].between(8, 11), "price_eur_mwh"] == 2.5).all()

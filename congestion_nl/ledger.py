@@ -17,7 +17,7 @@ def load(path: Path) -> pd.DataFrame:
         raise FileNotFoundError(f"No prediction ledger at {path}; run the predict command first")
     ledger = pd.read_csv(path)
     ledger["delivery_date"] = pd.to_datetime(ledger["delivery_date"]).dt.normalize()
-    ledger["cell"] = ledger["cell"].astype(str)
+    ledger["area"] = ledger["area"].astype(str)
     ledger["issued_at"] = pd.to_datetime(ledger["issued_at"], utc=True)
     return ledger
 

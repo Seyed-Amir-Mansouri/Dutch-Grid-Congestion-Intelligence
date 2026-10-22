@@ -21,17 +21,17 @@ def _read_csv(path: Path, columns: list[str]) -> pd.DataFrame:
 def _normalize_market(frame: pd.DataFrame) -> pd.DataFrame:
     """Set key dtypes on a national frame."""
     frame["delivery_date"] = pd.to_datetime(frame["delivery_date"]).dt.normalize()
-    frame["hour"] = frame["hour"].astype(int)
+    frame["quarter"] = frame["quarter"].astype(int)
     return frame.groupby(schemas.MARKET_KEY, as_index=False).mean()
 
 
 def load_sdac(path: Path) -> pd.DataFrame:
-    """Load national day-ahead clearing prices and net positions per hour."""
+    """Load national day-ahead clearing prices and net positions per quarter-hour."""
     return _normalize_market(_read_csv(path, schemas.SDAC_COLUMNS))
 
 
 def load_forecasts(path: Path) -> pd.DataFrame:
-    """Load national load, wind and solar forecasts per hour."""
+    """Load national load, wind and solar forecasts per quarter-hour."""
     return _normalize_market(_read_csv(path, schemas.FORECAST_COLUMNS))
 
 
