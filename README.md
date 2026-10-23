@@ -1,6 +1,6 @@
 # Dutch Grid Congestion Risk
 
-This estimator predicts, for each delivery quarter-hour and each GOPACS congestion area in the Netherlands, the probability that the grid operator publishes a congestion-management request for that area. It is trained and checked against the requests that GOPACS publishes, and cross-checked against the CSC call-off report of the grid operators.
+This estimator predicts, for each delivery quarter-hour and each GOPACS congestion area in the Netherlands, the probability that the grid operator publishes a congestion-management request for that area. It also sums these up per area and day: how likely the area is to get a request at all, and in which hours. It is trained and checked against the requests that GOPACS publishes, and cross-checked against the CSC call-off report of the grid operators.
 
 ## What the code does
 
@@ -21,7 +21,11 @@ This estimator predicts, for each delivery quarter-hour and each GOPACS congesti
    - the neighbourhood: request quarter-hours yesterday and over the last 7 days in the area's cell, and how many areas of the cell and of the operator had requests yesterday
 
    A past day counts only the requests that had been announced by the issue time of the forecast for the following day. Requests for the delivery day itself are never used, even when they were announced before the issue time. Because the model learns from features shared by all areas, an area with few requests of its own still gets a forecast. GOPACS gives each announcement a creation time, which is what makes the issue-time cut possible. The period of an announcement can still be changed after it is created, and only the final period is published, so these features can be slightly optimistic.
-5. **Predict.** A gradient-boosted classifier gives a probability per row. The raw probability is calibrated with a logistic fit on the log-odds (Platt scaling), learned on the most recent window, so a forecast of 30% comes true about 30% of the time. A row is flagged when its probability reaches the model's threshold. Training picks that threshold as the lowest one whose precision on the most recent window reaches `target_precision`, so the flag trades recall for fewer false alarms. The predictions go to a ledger with their issue time, model version and flag.
+5. **Predict.** A gradient-boosted classifier gives a probability per row. In backtests its probabilities are close to calibrated as they are (a forecast of 30% comes true about 30% of the time), so by default they are used directly with fixed thresholds:
+   - a quarter-hour is flagged when its probability reaches `threshold`
+   - an area is flagged for the day when its highest quarter-hour probability reaches `day_threshold`. The day forecast also gives the expected number of requested quarter-hours (the sum of the probabilities) and the risky window, from the first to the last quarter-hour at or above `day_threshold`.
+
+   The quarter-hours go to `outputs/predictions.csv` and the area-days to `outputs/area_predictions.csv`, each with its issue time and model version. Setting `threshold_days` above 0 instead calibrates the probabilities with a logistic fit on the log-odds (Platt scaling) over that many recent days, and picks the quarter-hour threshold as the lowest one whose precision there reaches `target_precision`. Short windows hold few requests and made the threshold jump from day to day, so this is off by default.
 6. **Validate.** Once a day has settled, each logged prediction is joined to the requests that came. The validation step computes Brier score, skill against the base rate, ROC AUC, precision and recall, over the full history and over a recent window. If recent skill falls below the configured minimum, the command exits with status 2.
 
 ## Layout
@@ -42,7 +46,7 @@ congestion_nl/
     labels.py             expands GOPACS intervals into quarter-hourly 0/1 labels per area
     features.py           builds features and the target, with lags to prevent look-ahead
     rolling.py            trailing-window aggregates shifted by a reporting lag
-    estimator.py          gradient-boosted classifier: rolling backtest, threshold, calibration, save, load, predict
+    estimator.py          gradient-boosted classifier: rolling backtest, thresholds, area-day summary, save, load, predict
     pipeline.py           loads inputs, builds datasets, trains and issues daily predictions
     validate.py           scores the latest logged predictions against settled GOPACS requests
     ledger.py             reads and appends the prediction and validation CSVs
@@ -102,7 +106,7 @@ congestion-nl demo --start 2025-01-01 --days 400
 
 - **`locate`** writes `data/processed/area_locations.csv` and prints how many requests could be placed.
 - **`train`** saves the model to `models/`.
-- **`predict`** writes to `outputs/predictions.csv`. `--issued-at` records when the forecast was made.
+- **`predict`** writes quarter-hours to `outputs/predictions.csv` and area-days to `outputs/area_predictions.csv`, and prints the flagged areas with their window. `--issued-at` records when the forecast was made.
 - **`validate`** scores settled days. Days within `labels.settle_days` of `--as-of` are not scored yet.
 - **`demo`** writes synthetic inputs, including area locations, in the expected format.
 
@@ -110,12 +114,13 @@ congestion-nl demo --start 2025-01-01 --days 400
 
 - `[grid]` sets the cell size in degrees, the first delivery date used, and which request directions count as congestion.
 - `[features]` sets the short and long history windows in days, the lag on price history, the hour on the day before delivery at which forecasts are issued, and how many quiet days an area stays active. Requests for the day before delivery are used only if they were announced before the issue time, and requests for the delivery day are never used. Set `issue_hour` to the hour you actually run `predict`, because the features assume everything announced before it is known.
-- `[labels]` sets how many days after a delivery date the GOPACS record is treated as complete.
-- `[model]` sets the number of rolling test days, the threshold window, the target precision for the flag, the fallback threshold used when that target cannot be reached, and the boosting parameters.
+- `[labels]` sets how many days after a delivery date the GOPACS record is treated as complete. Days after the last GOPACS announcement in the downloaded file are never labelled, so a stale download does not turn into quiet days.
+- `[model]` sets the number of rolling test days, the quarter-hour and area-day thresholds, the optional threshold window and its target precision, and the boosting parameters.
 - `[validation]` sets the recent window length and the minimum acceptable skill.
 
 ## Notes on the design
 
-- Training is scored with a rolling daily backtest over the last `test_days` labelled days. Each test day gets its own model, trained on every label up to two days before it, because at 14:00 on the day before delivery that is the last complete day of requests. Its threshold and calibration are picked on the `threshold_days` before that cut-off, by a model trained on the data before them. `train` reports the score per day and in total, then fits the final model the same way on all labelled data.
+- Training is scored with a rolling daily backtest over the last `test_days` labelled days. Each test day gets its own model, trained on every label up to two days before it, because at 14:00 on the day before delivery that is the last complete day of requests. If `threshold_days` is set, its threshold and calibration are picked on the `threshold_days` before that cut-off, by a model trained on the data before them. `train` reports the quarter-hour score per day and in total, and the area-day score, then fits the final model the same way on all labelled data.
 - Targets after `label_end` are masked, so a feature table built for a prediction day never carries a label.
 - The demo data follows a simple rule, so its scores are much higher than real performance will be.
+- About 45% of requested quarter-hours repeat a quarter that was already requested the day before. These are forecast well. The rest are new windows, which come up at a rate of 0.1–3%, so they can rarely be flagged without many false alarms. Local weather forecasts, longer slot histories, other model types (random forest, extra trees, logistic regression) and a separate area-day model were tested in a rolling backtest and did not improve on this model.

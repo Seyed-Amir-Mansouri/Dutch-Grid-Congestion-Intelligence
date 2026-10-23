@@ -23,6 +23,7 @@ class Paths:
     locations: Path
     model_dir: Path
     predictions: Path
+    area_predictions: Path
     validation: Path
 
 

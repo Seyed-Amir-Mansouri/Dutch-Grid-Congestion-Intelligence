@@ -37,11 +37,16 @@ def load_inputs(config: Config) -> Inputs:
     )
 
 
-def label_cutoff(config: Config, today: pd.Timestamp | None = None) -> pd.Timestamp:
+def label_cutoff(config: Config, events: pd.DataFrame, today: pd.Timestamp | None = None) -> pd.Timestamp:
     """Return the last delivery date whose GOPACS record is considered complete."""
     if today is None:
         today = pd.Timestamp(datetime.now(timezone.utc).date())
-    return today.normalize() - pd.Timedelta(days=config.labels.settle_days)
+    settle = pd.Timedelta(days=config.labels.settle_days)
+    end = today.normalize() - settle
+    # days after the GOPACS download have no requests yet, which must not count as quiet days
+    if len(events):
+        end = min(end, events["announced_at"].max().normalize() - settle)
+    return end
 
 
 def build(config: Config, inputs: Inputs, label_end: pd.Timestamp | None) -> pd.DataFrame:
@@ -72,3 +77,12 @@ def predict_day(
     rows["issued_at"] = issued_at.isoformat()
     rows["model_version"] = bundle["model_version"]
     return rows[schemas.PREDICTION_COLUMNS].reset_index(drop=True)
+
+
+def area_forecast(bundle: dict, predictions: pd.DataFrame) -> pd.DataFrame:
+    """Summarise quarter-hour predictions per area for the day, most likely areas first."""
+    days = estimator.area_days(predictions, bundle["day_threshold"])
+    days["issued_at"] = predictions["issued_at"].iloc[0]
+    days["model_version"] = bundle["model_version"]
+    days = days.sort_values("peak_probability", ascending=False)
+    return days[schemas.AREA_DAY_COLUMNS].reset_index(drop=True)

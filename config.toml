@@ -9,6 +9,7 @@ manual_locations = "reference/manual_locations.csv"
 locations = "data/processed/area_locations.csv"
 model_dir = "models"
 predictions = "outputs/predictions.csv"
+area_predictions = "outputs/area_predictions.csv"
 validation = "outputs/validation_history.csv"
 
 [grid]
@@ -28,8 +29,9 @@ settle_days = 1
 
 [model]
 test_days = 3
-threshold_days = 14
-threshold = 0.5
+threshold_days = 0
+threshold = 0.4
+day_threshold = 0.3
 target_precision = 0.6
 learning_rate = 0.03
 max_iter = 300

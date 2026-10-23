@@ -21,6 +21,7 @@ class Settings:
     test_days: int
     threshold_days: int
     threshold: float
+    day_threshold: float
     target_precision: float
     learning_rate: float
     max_iter: int
@@ -75,10 +76,10 @@ def _fit_threshold(fit_part: pd.DataFrame, check_part: pd.DataFrame, features: l
 
 
 def fit_bundle(labelled: pd.DataFrame, features: list[str], settings: Settings) -> dict:
-    """Pick the threshold and calibration on the most recent window, then fit on all given labels."""
+    """Fit on all given labels, with the threshold and calibration picked on the most recent window if one is set."""
     threshold, calibrator = settings.threshold, None
     early, recent = _split(labelled, settings.threshold_days)
-    if len(early) and len(recent):
+    if settings.threshold_days > 0 and len(early) and len(recent):
         _, calibrator, threshold = _fit_threshold(early, recent, features, settings)
     estimator = _estimator(settings).fit(labelled[features], labelled["target"])
     trained_at = datetime.now(timezone.utc)
@@ -87,6 +88,7 @@ def fit_bundle(labelled: pd.DataFrame, features: list[str], settings: Settings) 
         "calibrator": calibrator,
         "features": list(features),
         "threshold": threshold,
+        "day_threshold": settings.day_threshold,
         "model_version": f"hgb-{trained_at:%Y%m%dT%H%M%SZ}",
         "trained_at": trained_at.isoformat(),
     }
@@ -106,6 +108,7 @@ def backtest(labelled: pd.DataFrame, features: list[str], settings: Settings, da
         rows["risk_probability"] = predict(bundle, rows)
         rows["threshold"] = bundle["threshold"]
         rows["risk_flag"] = (rows["risk_probability"] >= bundle["threshold"]).astype(int)
+        rows["day_threshold"] = bundle["day_threshold"]
         parts.append(rows)
     return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
 
@@ -124,11 +127,36 @@ def train(dataset: pd.DataFrame, features: list[str], settings: Settings) -> tup
             {"date": str(day.date()), "threshold": float(g["threshold"].iloc[0]), **metrics.score(g["target"], g["risk_probability"], flag=g["risk_flag"])}
             for day, g in results.groupby("delivery_date")
         ]
+        days = area_days(results, results["day_threshold"].iloc[0])
+        report["holdout_area_days"] = metrics.score(days["target"], days["peak_probability"], flag=days["day_flag"])
 
     bundle = fit_bundle(labelled, features, settings)
     report["threshold"] = bundle["threshold"]
     report["model_version"] = bundle["model_version"]
     return bundle, report
+
+
+def area_days(rows: pd.DataFrame, day_threshold: float) -> pd.DataFrame:
+    """Summarise quarter-hour forecasts per area and day: peak probability, expected quarters and the risky window."""
+    rows = rows.assign(risky=rows["risk_probability"] >= day_threshold)
+    group = rows.groupby(["delivery_date", "area"])
+    days = group.agg(
+        peak_probability=("risk_probability", "max"),
+        expected_quarters=("risk_probability", "sum"),
+    )
+    window = rows[rows["risky"]].groupby(["delivery_date", "area"])["quarter"].agg(["min", "max"])
+    days["window_start"] = window["min"].map(_clock)
+    days["window_end"] = (window["max"] + 1).map(_clock)
+    days["day_flag"] = (days["peak_probability"] >= day_threshold).astype(int)
+    if "target" in rows:
+        days["target"] = group["target"].max()
+    return days.reset_index()
+
+
+def _clock(quarter: float) -> str:
+    """Return the HH:MM start time of a quarter-hour index."""
+    minutes = int(quarter) * 15
+    return f"{minutes // 60:02d}:{minutes % 60:02d}"
 
 
 def save(bundle: dict, model_dir: Path) -> Path:

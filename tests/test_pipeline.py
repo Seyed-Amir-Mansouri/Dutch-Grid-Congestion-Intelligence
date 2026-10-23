@@ -128,16 +128,20 @@ def test_choose_threshold_reaches_target_precision():
     assert metrics.choose_threshold(np.zeros(6), p, 0.6, 0.5) == 0.5
 
 
-def test_training_reports_chosen_threshold(trained):
-    """The bundle keeps the threshold picked on the most recent window."""
+def test_training_uses_the_fixed_thresholds_without_a_window(trained, config):
+    """With no threshold window the bundle keeps the configured thresholds and no calibrator."""
     _, _, bundle, report = trained
-    assert report["threshold"] == bundle["threshold"]
-    assert 0.0 < bundle["threshold"] <= 1.0
+    assert config.model.threshold_days == 0
+    assert report["threshold"] == bundle["threshold"] == config.model.threshold
+    assert bundle["day_threshold"] == config.model.day_threshold
+    assert bundle["calibrator"] is None
 
 
-def test_calibrator_keeps_the_ranking(trained):
-    """Calibration changes probabilities but not their order."""
-    _, dataset, bundle, _ = trained
+def test_calibrator_keeps_the_ranking(trained, config):
+    """Calibration on a threshold window changes probabilities but not their order."""
+    _, dataset, _, _ = trained
+    settings = dataclasses.replace(config.model, threshold_days=30)
+    bundle = estimator.fit_bundle(dataset[dataset["target"].notna()], FEATURE_COLUMNS, settings)
     assert bundle["calibrator"] is not None
     rows = dataset.head(500)
     raw = bundle["estimator"].predict_proba(rows[bundle["features"]])[:, 1]
@@ -166,3 +170,26 @@ def test_backtest_ignores_labels_not_known_at_issue_time(trained, config):
     changed.loc[recent, "target"] = 1 - changed.loc[recent, "target"]
     after = estimator.backtest(changed, FEATURE_COLUMNS, config.model, 1)
     assert np.allclose(base["risk_probability"], after["risk_probability"])
+
+
+def test_label_cutoff_stops_at_the_gopacs_download(config):
+    """Days after the last known announcement are not labelled."""
+    events = pd.DataFrame({"announced_at": pd.to_datetime(["2026-10-01 09:00", "2026-10-16 08:00"])})
+    assert pipeline.label_cutoff(config, events, pd.Timestamp("2026-10-22")) == pd.Timestamp("2026-10-15")
+    assert pipeline.label_cutoff(config, events, pd.Timestamp("2026-10-10")) == pd.Timestamp("2026-10-09")
+
+
+def test_area_days_summarise_the_risky_window():
+    """An area-day takes its peak probability and the span of quarters at or above the day threshold."""
+    rows = pd.DataFrame({
+        "delivery_date": pd.Timestamp("2026-10-20"),
+        "area": ["A"] * 4 + ["B"] * 4,
+        "quarter": [40, 41, 42, 43] * 2,
+        "risk_probability": [0.1, 0.35, 0.5, 0.2, 0.05, 0.1, 0.2, 0.1],
+        "target": [0, 1, 1, 0, 0, 0, 0, 0],
+    })
+    days = estimator.area_days(rows, 0.3).set_index("area")
+    assert days.loc["A", "peak_probability"] == 0.5
+    assert days.loc["A", ["window_start", "window_end", "day_flag", "target"]].tolist() == ["10:15", "10:45", 1, 1]
+    assert days.loc["B", "day_flag"] == 0 and pd.isna(days.loc["B", "window_start"])
+    assert days.loc["B", "expected_quarters"] == pytest.approx(0.45)

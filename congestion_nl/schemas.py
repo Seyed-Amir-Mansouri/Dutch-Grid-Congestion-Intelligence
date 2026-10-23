@@ -11,3 +11,8 @@ GOPACS_COLUMNS = ["event_id", "area", "direction", "operator", "postcodes", "mw"
 LOCATION_COLUMNS = ["area", "lat", "lon", "cell", "source"]
 
 PREDICTION_COLUMNS = KEY + ["issued_at", "model_version", "risk_probability", "risk_flag"]
+
+AREA_DAY_COLUMNS = [
+    "delivery_date", "area", "issued_at", "model_version",
+    "peak_probability", "expected_quarters", "window_start", "window_end", "day_flag",
+]
