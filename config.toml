@@ -6,6 +6,7 @@ postcodes = "data/raw/geonames/postcodes.zip"
 places = "data/raw/geonames/places.zip"
 csc_report = "data/raw/CSC_public_report_2026-10-01-0925.xlsx"
 manual_locations = "reference/manual_locations.csv"
+excluded_requests = "reference/excluded_requests.csv"
 locations = "data/processed/area_locations.csv"
 model_dir = "models"
 predictions = "outputs/predictions.csv"
@@ -14,7 +15,7 @@ validation = "outputs/validation_history.csv"
 
 [grid]
 cell_degrees = 0.25
-start_date = "2025-10-01"
+start_date = "2024-04-01"
 directions = ["feed-in", "offtake"]
 
 [features]
@@ -29,10 +30,7 @@ settle_days = 1
 
 [model]
 test_days = 3
-threshold_days = 0
-threshold = 0.4
-day_threshold = 0.3
-target_precision = 0.6
+day_threshold = 0.2
 learning_rate = 0.03
 max_iter = 300
 max_leaf_nodes = 31

@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import time
+
 import pandas as pd
 
 from . import schemas
 
 AREA = "NL"
+PIECE_MONTHS = 3
+PAUSE_SECONDS = 1
 
 
 def quarter_values(series: pd.Series, column: str, start: pd.Timestamp, end: pd.Timestamp) -> pd.DataFrame:
@@ -19,6 +23,20 @@ def quarter_values(series: pd.Series, column: str, start: pd.Timestamp, end: pd.
     return frame.groupby(schemas.MARKET_KEY, as_index=False)[column].mean()
 
 
+def _query(method, start: pd.Timestamp, end: pd.Timestamp, **kwargs):
+    """Run an ENTSO-E query in three-month pieces, well inside the one-year limit and the server's time limit."""
+    parts = []
+    piece_start = start
+    while piece_start < end:
+        if parts:
+            time.sleep(PAUSE_SECONDS)
+        piece_end = min(piece_start + pd.DateOffset(months=PIECE_MONTHS), end)
+        parts.append(method(AREA, start=piece_start, end=piece_end, **kwargs))
+        piece_start = piece_end
+    joined = pd.concat(parts)
+    return joined[~joined.index.duplicated(keep="last")]
+
+
 def build_client(api_key: str):
     """Construct an ENTSO-E pandas client from an API key."""
     from entsoe import EntsoePandasClient
@@ -28,8 +46,8 @@ def build_client(api_key: str):
 
 def fetch_sdac(client, start: pd.Timestamp, end: pd.Timestamp) -> pd.DataFrame:
     """Fetch day-ahead prices and net position for NL per quarter-hour."""
-    price = client.query_day_ahead_prices(AREA, start=start, end=end)
-    position = client.query_net_position(AREA, start=start, end=end, dayahead=True)
+    price = _query(client.query_day_ahead_prices, start, end)
+    position = _query(client.query_net_position, start, end, dayahead=True)
 
     price_frame = quarter_values(price, "price_eur_mwh", start, end)
     position_frame = quarter_values(position, "net_position_mw", start, end)
@@ -39,8 +57,8 @@ def fetch_sdac(client, start: pd.Timestamp, end: pd.Timestamp) -> pd.DataFrame:
 
 def fetch_forecasts(client, start: pd.Timestamp, end: pd.Timestamp) -> pd.DataFrame:
     """Fetch load, wind and solar forecasts for NL per quarter-hour."""
-    load = client.query_load_forecast(AREA, start=start, end=end)["Forecasted Load"]
-    renewables = client.query_wind_and_solar_forecast(AREA, start=start, end=end)
+    load = _query(client.query_load_forecast, start, end)["Forecasted Load"]
+    renewables = _query(client.query_wind_and_solar_forecast, start, end)
     wind = renewables.get("Wind Onshore", 0) + renewables.get("Wind Offshore", 0)
     solar = renewables.get("Solar", 0)
 

@@ -20,6 +20,7 @@ class Paths:
     places: Path
     csc_report: Path
     manual_locations: Path
+    excluded_requests: Path
     locations: Path
     model_dir: Path
     predictions: Path

@@ -46,6 +46,16 @@ def load_gopacs(path: Path) -> pd.DataFrame:
     return frame.sort_values("start_time").reset_index(drop=True)
 
 
+def load_exclusions(path: Path) -> pd.DataFrame:
+    """Load the hand-checked list of erroneous requests, by operator and announcement time window."""
+    if not path.exists():
+        return pd.DataFrame(columns=schemas.EXCLUSION_COLUMNS)
+    frame = _read_csv(path, schemas.EXCLUSION_COLUMNS)
+    frame["announced_from"] = pd.to_datetime(frame["announced_from"])
+    frame["announced_to"] = pd.to_datetime(frame["announced_to"])
+    return frame
+
+
 def load_locations(path: Path) -> pd.DataFrame:
     """Load the located areas written by the locate command."""
     if not path.exists():

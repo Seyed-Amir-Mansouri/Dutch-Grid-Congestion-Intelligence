@@ -8,7 +8,6 @@ import joblib
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import HistGradientBoostingClassifier
-from sklearn.linear_model import LogisticRegression
 
 from . import metrics
 
@@ -19,10 +18,7 @@ LABEL_GAP_DAYS = 2
 @dataclass(frozen=True)
 class Settings:
     test_days: int
-    threshold_days: int
-    threshold: float
     day_threshold: float
-    target_precision: float
     learning_rate: float
     max_iter: int
     max_leaf_nodes: int
@@ -43,51 +39,13 @@ def _estimator(settings: Settings) -> HistGradientBoostingClassifier:
     )
 
 
-def _split(labelled: pd.DataFrame, days: int) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Split rows into those before and within the last given number of days."""
-    cutoff = labelled["delivery_date"].max() - pd.Timedelta(days=days)
-    return labelled[labelled["delivery_date"] <= cutoff], labelled[labelled["delivery_date"] > cutoff]
-
-
-def _logit(probability: np.ndarray) -> np.ndarray:
-    """Return the log-odds of probabilities as a one-column matrix."""
-    clipped = np.clip(probability, 1e-6, 1 - 1e-6)
-    return np.log(clipped / (1 - clipped)).reshape(-1, 1)
-
-
-def calibrate(calibrator: LogisticRegression | None, probability: np.ndarray) -> np.ndarray:
-    """Map raw model probabilities through the calibrator, if there is one."""
-    if calibrator is None:
-        return probability
-    return calibrator.predict_proba(_logit(probability))[:, 1]
-
-
-def _fit_threshold(fit_part: pd.DataFrame, check_part: pd.DataFrame, features: list[str], settings: Settings):
-    """Fit on one part, then fit the calibrator and pick the flag threshold on the later part."""
-    model = _estimator(settings).fit(fit_part[features], fit_part["target"])
-    raw = model.predict_proba(check_part[features])[:, 1]
-    calibrator = None
-    if check_part["target"].nunique() == 2:
-        calibrator = LogisticRegression().fit(_logit(raw), check_part["target"])
-    threshold = metrics.choose_threshold(
-        check_part["target"], calibrate(calibrator, raw), settings.target_precision, settings.threshold
-    )
-    return model, calibrator, threshold
-
-
 def fit_bundle(labelled: pd.DataFrame, features: list[str], settings: Settings) -> dict:
-    """Fit on all given labels, with the threshold and calibration picked on the most recent window if one is set."""
-    threshold, calibrator = settings.threshold, None
-    early, recent = _split(labelled, settings.threshold_days)
-    if settings.threshold_days > 0 and len(early) and len(recent):
-        _, calibrator, threshold = _fit_threshold(early, recent, features, settings)
+    """Fit the classifier on all given labels."""
     estimator = _estimator(settings).fit(labelled[features], labelled["target"])
     trained_at = datetime.now(timezone.utc)
     return {
         "estimator": estimator,
-        "calibrator": calibrator,
         "features": list(features),
-        "threshold": threshold,
         "day_threshold": settings.day_threshold,
         "model_version": f"hgb-{trained_at:%Y%m%dT%H%M%SZ}",
         "trained_at": trained_at.isoformat(),
@@ -106,15 +64,17 @@ def backtest(labelled: pd.DataFrame, features: list[str], settings: Settings, da
         bundle = fit_bundle(known, features, settings)
         rows = labelled[labelled["delivery_date"] == day].copy()
         rows["risk_probability"] = predict(bundle, rows)
-        rows["threshold"] = bundle["threshold"]
-        rows["risk_flag"] = (rows["risk_probability"] >= bundle["threshold"]).astype(int)
-        rows["day_threshold"] = bundle["day_threshold"]
         parts.append(rows)
     return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
 
 
+def score_days(days: pd.DataFrame) -> dict:
+    """Score area-day flags against whether the area had any request that day."""
+    return metrics.score(days["target"], days["peak_probability"], flag=days["day_flag"])
+
+
 def train(dataset: pd.DataFrame, features: list[str], settings: Settings) -> tuple[dict, dict]:
-    """Score a rolling daily backtest over the last test days, then fit the final model on all labels."""
+    """Score a rolling daily backtest of area-days over the last test days, then fit the final model on all labels."""
     labelled = dataset[dataset["target"].notna()].reset_index(drop=True)
     if labelled.empty:
         raise ValueError("No labelled rows available for training")
@@ -122,16 +82,14 @@ def train(dataset: pd.DataFrame, features: list[str], settings: Settings) -> tup
     report = {"train_rows": int(len(labelled))}
     results = backtest(labelled, features, settings, settings.test_days)
     if len(results):
-        report["holdout"] = metrics.score(results["target"], results["risk_probability"], flag=results["risk_flag"])
+        days = area_days(results, settings.day_threshold)
+        report["holdout"] = score_days(days)
         report["holdout_days"] = [
-            {"date": str(day.date()), "threshold": float(g["threshold"].iloc[0]), **metrics.score(g["target"], g["risk_probability"], flag=g["risk_flag"])}
-            for day, g in results.groupby("delivery_date")
+            {"date": str(day.date()), **score_days(g)} for day, g in days.groupby("delivery_date")
         ]
-        days = area_days(results, results["day_threshold"].iloc[0])
-        report["holdout_area_days"] = metrics.score(days["target"], days["peak_probability"], flag=days["day_flag"])
 
     bundle = fit_bundle(labelled, features, settings)
-    report["threshold"] = bundle["threshold"]
+    report["day_threshold"] = bundle["day_threshold"]
     report["model_version"] = bundle["model_version"]
     return bundle, report
 
@@ -176,6 +134,5 @@ def load(model_dir: Path) -> dict:
 
 
 def predict(bundle: dict, dataset: pd.DataFrame) -> np.ndarray:
-    """Return calibrated congestion probabilities for each feature row."""
-    raw = bundle["estimator"].predict_proba(dataset[bundle["features"]])[:, 1]
-    return calibrate(bundle.get("calibrator"), raw)
+    """Return congestion probabilities for each feature row."""
+    return bundle["estimator"].predict_proba(dataset[bundle["features"]])[:, 1]

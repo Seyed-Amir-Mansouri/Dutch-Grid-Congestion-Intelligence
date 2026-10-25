@@ -41,6 +41,20 @@ FEATURE_COLUMNS = [
     "operator_active_areas",
 ]
 
+# the area's own history is also counted per request direction
+DIRECTIONS = {"feed-in": "feed", "offtake": "off"}
+DIRECTION_HISTORY = [
+    "area_yesterday",
+    "area_week",
+    "area_month",
+    "mw_week",
+    "run_days",
+    "days_since_request",
+    "area_age_days",
+    "area_slot_week",
+]
+FEATURE_COLUMNS += [f"{column}_{suffix}" for suffix in DIRECTIONS.values() for column in DIRECTION_HISTORY]
+
 
 def area_table(locations: pd.DataFrame, events: pd.DataFrame) -> pd.DataFrame:
     """Return one row per located area with requests, numbered from north-west to south-east."""
@@ -118,6 +132,25 @@ def slot_history(events: pd.DataFrame, settings) -> pd.DataFrame:
     return pd.concat(shifted).groupby(schemas.KEY).size().rename("area_slot_week").reset_index()
 
 
+def add_direction_history(
+    config: Config, frame: pd.DataFrame, events: pd.DataFrame, areas: pd.DataFrame, last_day: pd.Timestamp
+) -> pd.DataFrame:
+    """Add the area's own history features counted separately for feed-in and offtake requests."""
+    for direction, suffix in DIRECTIONS.items():
+        chosen = events[events["direction"] == direction]
+        if chosen.empty:
+            # an all-missing column cannot be binned by the classifier, so a direction without requests is constant
+            frame[[f"{column}_{suffix}" for column in DIRECTION_HISTORY]] = 0.0
+            continue
+        history = [column for column in DIRECTION_HISTORY if column != "area_slot_week"]
+        daily = daily_history(config, chosen, areas, last_day)[["delivery_date", "area"] + history]
+        frame = frame.merge(daily.rename(columns={c: f"{c}_{suffix}" for c in history}), on=["delivery_date", "area"], how="left")
+        slots = slot_history(chosen, config.features).rename(columns={"area_slot_week": f"area_slot_week_{suffix}"})
+        frame = frame.merge(slots, on=schemas.KEY, how="left")
+        frame[f"area_slot_week_{suffix}"] = frame[f"area_slot_week_{suffix}"].fillna(0)
+    return frame
+
+
 def build_dataset(
     config: Config,
     sdac: pd.DataFrame,
@@ -151,6 +184,7 @@ def build_dataset(
     frame["is_weekend"] = (frame["weekday"] >= 5).astype(int)
     frame = frame.merge(slot_history(events, settings), on=schemas.KEY, how="left")
     frame["area_slot_week"] = frame["area_slot_week"].fillna(0)
+    frame = add_direction_history(config, frame, events, areas, market["delivery_date"].max())
     frame = frame.sort_values(schemas.KEY).reset_index(drop=True)
 
     labelled = label_grid(frame[schemas.KEY], events)

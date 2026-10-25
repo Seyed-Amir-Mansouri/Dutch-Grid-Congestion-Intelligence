@@ -18,6 +18,18 @@ class Inputs:
     areas: pd.DataFrame
 
 
+def drop_excluded(events: pd.DataFrame, exclusions: pd.DataFrame) -> pd.DataFrame:
+    """Remove requests that an operator announced in error, as listed in the exclusions."""
+    wrong = pd.Series(False, index=events.index)
+    for row in exclusions.itertuples():
+        wrong |= (
+            (events["operator"] == row.operator)
+            & (events["announced_at"] >= row.announced_from)
+            & (events["announced_at"] <= row.announced_to)
+        )
+    return events[~wrong]
+
+
 def located_events(config: Config, events: pd.DataFrame, locations: pd.DataFrame) -> pd.DataFrame:
     """Attach a cell to each event and keep the configured directions."""
     events = events[events["direction"].isin(config.grid.directions)]
@@ -28,6 +40,7 @@ def load_inputs(config: Config) -> Inputs:
     """Read every configured input file."""
     locations = ingest.load_locations(config.resolve(config.paths.locations))
     events = ingest.load_gopacs(config.resolve(config.paths.gopacs))
+    events = drop_excluded(events, ingest.load_exclusions(config.resolve(config.paths.excluded_requests)))
     events = located_events(config, events, locations)
     return Inputs(
         sdac=ingest.load_sdac(config.resolve(config.paths.sdac)),
@@ -73,7 +86,6 @@ def predict_day(
 
     issued_at = issued_at or datetime.now(timezone.utc)
     rows["risk_probability"] = estimator.predict(bundle, rows)
-    rows["risk_flag"] = (rows["risk_probability"] >= bundle["threshold"]).astype(int)
     rows["issued_at"] = issued_at.isoformat()
     rows["model_version"] = bundle["model_version"]
     return rows[schemas.PREDICTION_COLUMNS].reset_index(drop=True)

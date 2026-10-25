@@ -34,6 +34,14 @@ def expand_events(events: pd.DataFrame) -> pd.DataFrame:
     return frame.drop_duplicates(subset=schemas.KEY).reset_index(drop=True)
 
 
+def area_day_labels(keys: pd.DataFrame, events: pd.DataFrame) -> pd.DataFrame:
+    """Attach a 0/1 flag to each area-day row: whether any request covered the area that day."""
+    days = expand_quarters(events, [])[schemas.AREA_KEY].drop_duplicates().assign(congested=1)
+    labelled = keys[schemas.AREA_KEY].merge(days, on=schemas.AREA_KEY, how="left")
+    labelled["congested"] = labelled["congested"].fillna(0).astype(int)
+    return labelled
+
+
 def label_grid(keys: pd.DataFrame, events: pd.DataFrame) -> pd.DataFrame:
     """Attach a 0/1 congestion flag to each key row using expanded events."""
     quarters = expand_events(events)

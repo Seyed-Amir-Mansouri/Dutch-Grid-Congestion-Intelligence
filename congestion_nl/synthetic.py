@@ -61,7 +61,10 @@ def generate(config: Config, start: str, days: int, seed: int = 7) -> dict[str, 
     load = 11000 + 2500 * np.sin((hour - 8) / 24 * 2 * np.pi) - 900 * (weekday >= 5)
     load = load + rng.normal(0, 300, n)
     wind = rng.gamma(2.0, 1500.0, n)
-    solar = 6000 * daylight * rng.uniform(0.4, 1.0, n)
+    # one sunshine level per day, so congestion comes on sunny days and some area-days stay quiet
+    days_index = national["delivery_date"].factorize()[0]
+    sunshine = rng.uniform(0.2, 1.0, days_index.max() + 1)[days_index]
+    solar = 6000 * daylight * sunshine * rng.uniform(0.85, 1.0, n)
     residual = load - wind - solar
 
     price = 40 + 0.012 * residual + rng.normal(0, 6, n)
@@ -78,7 +81,7 @@ def generate(config: Config, start: str, days: int, seed: int = 7) -> dict[str, 
     area_grid = national.assign(solar=solar).merge(pd.DataFrame({"area": names}), how="cross")
     m = len(area_grid)
     area_idx = area_grid["area"].map({a: i for i, a in enumerate(names)}).to_numpy()
-    logit = (area_grid["solar"].to_numpy() - 3500) / 700 + rng.normal(0, 0.7, m) + area_idx * 0.2 - 1.0
+    logit = (area_grid["solar"].to_numpy() - 4200) / 500 + rng.normal(0, 0.7, m) + area_idx * 0.3 - 1.0
     congested = (rng.random(m) < 1 / (1 + np.exp(-logit))).astype(int)
     gopacs = _runs_to_events(area_grid.assign(congested=congested))
 

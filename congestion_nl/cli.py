@@ -128,20 +128,18 @@ def cmd_predict(args: argparse.Namespace) -> None:
     area_path = config.resolve(config.paths.area_predictions)
     ledger.append(areas, area_path)
 
-    flagged = int(predictions["risk_flag"].sum())
-    print(f"{len(predictions)} rows for {day:%Y-%m-%d}, {flagged} quarter-hours flagged at threshold {bundle['threshold']}")
     risky = areas[areas["day_flag"] == 1]
-    print(f"{len(risky)} of {len(areas)} areas flagged for the day at threshold {bundle['day_threshold']}")
+    print(f"{day:%Y-%m-%d}: {len(risky)} of {len(areas)} active areas flagged at threshold {bundle['day_threshold']}")
     if len(risky):
         print(risky[["area", "peak_probability", "expected_quarters", "window_start", "window_end"]].round(2).to_string(index=False))
     print(f"logged: {ledger_path}, {area_path}")
 
 
 def cmd_validate(args: argparse.Namespace) -> None:
-    """Score logged predictions against settled GOPACS events and append the result."""
+    """Score logged area-day predictions against settled GOPACS events and append the result."""
     config = load_config(args.config)
     as_of = _timestamp(args.as_of) if args.as_of else _today()
-    predictions = ledger.load(config.resolve(config.paths.predictions))
+    predictions = ledger.load(config.resolve(config.paths.area_predictions))
     inputs = pipeline.load_inputs(config)
     label_end = pipeline.label_cutoff(config, inputs.events, as_of)
     result = validate.evaluate(config, predictions, inputs.events, label_end, as_of)
