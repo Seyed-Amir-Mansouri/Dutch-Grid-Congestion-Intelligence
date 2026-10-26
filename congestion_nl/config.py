@@ -15,6 +15,7 @@ DEFAULT_CONFIG = Path(__file__).resolve().parents[1] / "config.toml"
 class Paths:
     sdac: Path
     forecasts: Path
+    weather: Path
     gopacs: Path
     postcodes: Path
     places: Path

@@ -55,6 +55,43 @@ DIRECTION_HISTORY = [
 ]
 FEATURE_COLUMNS += [f"{column}_{suffix}" for suffix in DIRECTIONS.values() for column in DIRECTION_HISTORY]
 
+# the cell's weather forecast, and how it changes against the days before
+WEATHER_VALUES = ["temperature_c", "radiation_wm2", "cloud_cover_pct", "wind_100m_kmh", "wind_10m_kmh"]
+WEATHER_DAY = {"rad_day": "radiation_wm2", "wind_day": "wind_100m_kmh", "temp_day": "temperature_c", "cloud_day": "cloud_cover_pct"}
+WEATHER_FEATURES = (
+    WEATHER_VALUES
+    + ["radiation_change", "wind_100m_change"]
+    + list(WEATHER_DAY)
+    + [f"{column}_change" for column in WEATHER_DAY]
+    + ["rad_day_vs3", "wind_day_vs3"]
+)
+FEATURE_COLUMNS += WEATHER_FEATURES
+
+
+def weather_features(weather: pd.DataFrame) -> pd.DataFrame:
+    """Turn hourly cell forecasts into quarter-hour features with changes against the previous days."""
+    hourly = weather.assign(delivery_date=weather["time"].dt.normalize(), hour=weather["time"].dt.hour)
+    # the repeated hour on the autumn clock change is averaged
+    hourly = hourly.groupby(["delivery_date", "hour", "cell"], as_index=False)[WEATHER_VALUES].mean()
+    quarters = pd.concat([hourly.assign(quarter=hourly["hour"] * 4 + k) for k in range(4)], ignore_index=True)
+    quarters = quarters.drop(columns="hour")
+
+    day = quarters.groupby(["cell", "delivery_date"], as_index=False).agg(
+        **{name: (column, "mean") for name, column in WEATHER_DAY.items()}
+    )
+    day = day.sort_values(["cell", "delivery_date"]).reset_index(drop=True)
+    by_cell = day.groupby("cell")
+    for name in WEATHER_DAY:
+        day[f"{name}_change"] = day[name] - by_cell[name].shift(1)
+    for name in ("rad_day", "wind_day"):
+        day[f"{name}_vs3"] = day[name] - by_cell[name].transform(lambda s: s.shift(1).rolling(3, min_periods=1).mean())
+
+    quarters = quarters.sort_values(["cell", "quarter", "delivery_date"]).reset_index(drop=True)
+    by_slot = quarters.groupby(["cell", "quarter"])
+    quarters["radiation_change"] = quarters["radiation_wm2"] - by_slot["radiation_wm2"].shift(1)
+    quarters["wind_100m_change"] = quarters["wind_100m_kmh"] - by_slot["wind_100m_kmh"].shift(1)
+    return quarters.merge(day, on=["cell", "delivery_date"], how="left")[schemas.MARKET_KEY + ["cell"] + WEATHER_FEATURES]
+
 
 def area_table(locations: pd.DataFrame, events: pd.DataFrame) -> pd.DataFrame:
     """Return one row per located area with requests, numbered from north-west to south-east."""
@@ -155,6 +192,7 @@ def build_dataset(
     config: Config,
     sdac: pd.DataFrame,
     forecasts: pd.DataFrame,
+    weather: pd.DataFrame,
     events: pd.DataFrame,
     areas: pd.DataFrame,
     label_end: pd.Timestamp | None,
@@ -185,6 +223,7 @@ def build_dataset(
     frame = frame.merge(slot_history(events, settings), on=schemas.KEY, how="left")
     frame["area_slot_week"] = frame["area_slot_week"].fillna(0)
     frame = add_direction_history(config, frame, events, areas, market["delivery_date"].max())
+    frame = frame.merge(weather_features(weather), on=schemas.MARKET_KEY + ["cell"], how="left")
     frame = frame.sort_values(schemas.KEY).reset_index(drop=True)
 
     labelled = label_grid(frame[schemas.KEY], events)

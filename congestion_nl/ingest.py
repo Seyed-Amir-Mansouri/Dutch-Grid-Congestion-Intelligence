@@ -35,6 +35,13 @@ def load_forecasts(path: Path) -> pd.DataFrame:
     return _normalize_market(_read_csv(path, schemas.FORECAST_COLUMNS))
 
 
+def load_weather(path: Path) -> pd.DataFrame:
+    """Load hourly local-time weather forecasts per grid cell."""
+    frame = _read_csv(path, schemas.WEATHER_COLUMNS)
+    frame["time"] = pd.to_datetime(frame["time"])
+    return frame
+
+
 def load_gopacs(path: Path) -> pd.DataFrame:
     """Load GOPACS congestion-management events with parsed start and end times."""
     frame = _read_csv(path, schemas.GOPACS_COLUMNS)

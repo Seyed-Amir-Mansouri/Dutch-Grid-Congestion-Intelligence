@@ -1,6 +1,7 @@
 [paths]
 sdac = "data/raw/sdac_results.csv"
 forecasts = "data/raw/system_forecasts.csv"
+weather = "data/raw/weather.csv"
 gopacs = "data/raw/gopacs_events.csv"
 postcodes = "data/raw/geonames/postcodes.zip"
 places = "data/raw/geonames/places.zip"

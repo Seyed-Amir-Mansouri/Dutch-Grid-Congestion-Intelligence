@@ -49,8 +49,26 @@ def _runs_to_events(frame: pd.DataFrame) -> pd.DataFrame:
     return out[schemas.GOPACS_COLUMNS]
 
 
+def _weather(national: pd.DataFrame, cells, rng: np.random.Generator) -> pd.DataFrame:
+    """Return hourly weather per cell that follows the national sunshine of each day."""
+    hourly = national[national["quarter"] % 4 == 0]
+    frames = []
+    for cell in cells:
+        n = len(hourly)
+        frames.append(pd.DataFrame({
+            "cell": cell,
+            "time": hourly["delivery_date"] + pd.to_timedelta(hourly["quarter"] * 15, unit="min"),
+            "temperature_c": (12 + 6 * hourly["daylight"] + rng.normal(0, 2, n)).round(1).to_numpy(),
+            "radiation_wm2": (800 * hourly["daylight"] * hourly["sunshine"] * rng.uniform(0.8, 1.0, n)).round(0).to_numpy(),
+            "cloud_cover_pct": (100 * (1 - hourly["sunshine"]) + rng.normal(0, 10, n)).clip(0, 100).round(0).to_numpy(),
+            "wind_100m_kmh": rng.gamma(2.0, 10.0, n).round(1),
+            "wind_10m_kmh": rng.gamma(2.0, 6.0, n).round(1),
+        }))
+    return pd.concat(frames, ignore_index=True)[schemas.WEATHER_COLUMNS]
+
+
 def generate(config: Config, start: str, days: int, seed: int = 7) -> dict[str, Path]:
-    """Write synthetic SDAC, forecast, GOPACS and location files to the configured paths."""
+    """Write synthetic SDAC, forecast, weather, GOPACS and location files to the configured paths."""
     rng = np.random.default_rng(seed)
     national = _national_grid(pd.Timestamp(start), days)
     hour = national["quarter"].to_numpy() / 4
@@ -90,10 +108,12 @@ def generate(config: Config, start: str, days: int, seed: int = 7) -> dict[str, 
         [(a, lat, lon, cell_of(lat, lon, size), "synthetic") for a, (lat, lon) in AREAS.items()],
         columns=schemas.LOCATION_COLUMNS,
     )
+    weather = _weather(national.assign(daylight=daylight, sunshine=sunshine), locations["cell"].unique(), rng)
 
     targets = {
         "sdac": (config.resolve(config.paths.sdac), sdac),
         "forecasts": (config.resolve(config.paths.forecasts), forecasts),
+        "weather": (config.resolve(config.paths.weather), weather),
         "gopacs": (config.resolve(config.paths.gopacs), gopacs),
         "locations": (config.resolve(config.paths.locations), locations),
     }

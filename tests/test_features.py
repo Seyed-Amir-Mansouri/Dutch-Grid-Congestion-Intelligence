@@ -42,7 +42,7 @@ def _day(frame, day=DAY, area=AREA):
 
 def _build(config, inputs, events, label_end=None):
     """Build the dataset from loaded inputs and the given events."""
-    return build_dataset(config, inputs.sdac, inputs.forecasts, events, inputs.areas, label_end)
+    return build_dataset(config, inputs.sdac, inputs.forecasts, inputs.weather, events, inputs.areas, label_end)
 
 
 def _same_features(before, after):
@@ -123,6 +123,16 @@ def test_area_without_recent_requests_is_not_forecast(config):
     assert pd.Timestamp("2025-01-07") in days
     assert pd.Timestamp("2025-01-08") not in days
     assert pd.Timestamp("2025-01-02") not in days
+
+
+def test_rows_carry_their_cell_weather(config):
+    """Each row gets the weather of its area's cell for that quarter-hour."""
+    inputs = _inputs(config)
+    frame = _day(_build(config, inputs, inputs.events))
+    cell = inputs.areas.set_index("area").loc[AREA, "cell"]
+    noon = inputs.weather[(inputs.weather["cell"] == cell) & (inputs.weather["time"] == DAY + pd.Timedelta(hours=12))]
+    assert (frame.loc[frame["quarter"].between(48, 51), "radiation_wm2"] == noon["radiation_wm2"].iloc[0]).all()
+    assert frame["rad_day_change"].notna().all()
 
 
 def test_target_is_masked_after_label_end(config):

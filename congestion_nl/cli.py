@@ -57,6 +57,24 @@ def cmd_fetch_entsoe(args: argparse.Namespace) -> None:
     print(f"forecasts: {forecasts_path} ({len(forecasts)} rows)")
 
 
+def cmd_fetch_weather(args: argparse.Namespace) -> None:
+    """Fetch Open-Meteo forecasts for every located cell and merge them into the weather CSV."""
+    from . import ingest, weather_source
+
+    config = load_config(args.config)
+    cells = sorted(ingest.load_locations(config.resolve(config.paths.locations))["cell"].unique())
+    weather = weather_source.fetch(cells, _timestamp(args.start), _timestamp(args.end), config.grid.cell_degrees)
+
+    path = config.resolve(config.paths.weather)
+    if path.exists():
+        # newer downloads replace older ones for the same cell and hour
+        weather = pd.concat([ingest.load_weather(path), weather]).drop_duplicates(["cell", "time"], keep="last")
+    weather = weather.sort_values(["cell", "time"])
+    path.parent.mkdir(parents=True, exist_ok=True)
+    weather.to_csv(path, index=False)
+    print(f"weather: {path} ({len(weather)} rows for {len(cells)} cells)")
+
+
 def cmd_fetch_gopacs(args: argparse.Namespace) -> None:
     """Fetch historical congestion-management announcements from GOPACS."""
     from . import gopacs_source
@@ -168,6 +186,11 @@ def build_parser() -> argparse.ArgumentParser:
     fetch.add_argument("--start", required=True, help="start date YYYY-MM-DD")
     fetch.add_argument("--end", required=True, help="end date YYYY-MM-DD")
     fetch.set_defaults(func=cmd_fetch_entsoe)
+
+    fetch_weather = sub.add_parser("fetch-weather", help="fetch Open-Meteo forecasts for each located cell")
+    fetch_weather.add_argument("--start", required=True, help="first date YYYY-MM-DD")
+    fetch_weather.add_argument("--end", required=True, help="last date YYYY-MM-DD, included")
+    fetch_weather.set_defaults(func=cmd_fetch_weather)
 
     fetch_gopacs = sub.add_parser("fetch-gopacs", help="fetch congestion events from GOPACS")
     fetch_gopacs.set_defaults(func=cmd_fetch_gopacs)
