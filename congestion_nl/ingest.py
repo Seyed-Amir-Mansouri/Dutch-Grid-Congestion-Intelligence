@@ -53,6 +53,16 @@ def load_gopacs(path: Path) -> pd.DataFrame:
     return frame.sort_values("start_time").reset_index(drop=True)
 
 
+def load_notices(path: Path) -> pd.DataFrame:
+    """Load the GOPACS transport-restriction notices, or an empty table when there is no file."""
+    if not path.exists():
+        return pd.DataFrame(columns=schemas.NOTICE_COLUMNS)
+    frame = _read_csv(path, schemas.NOTICE_COLUMNS)
+    for column in ("start_time", "end_time", "announced_at"):
+        frame[column] = pd.to_datetime(frame[column])
+    return frame
+
+
 def load_exclusions(path: Path) -> pd.DataFrame:
     """Load the hand-checked list of erroneous requests, by operator and announcement time window."""
     if not path.exists():

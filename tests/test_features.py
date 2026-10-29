@@ -142,3 +142,32 @@ def test_target_is_masked_after_label_end(config):
     dataset = _build(config, inputs, inputs.events, label_end)
     assert dataset.loc[dataset["delivery_date"] > label_end, "target"].isna().all()
     assert dataset.loc[dataset["delivery_date"] <= label_end, "target"].notna().all()
+
+
+def _notice(postcode, posted, start="2025-01-15 10:00", end="2025-01-15 12:00"):
+    """Build one transport-restriction notice for a postcode."""
+    return pd.DataFrame({
+        "notice_id": ["n1"], "operator": ["Enexis"], "postcodes": [postcode], "direction": ["Opwaarts"],
+        "start_time": [pd.Timestamp(start)], "end_time": [pd.Timestamp(end)], "announced_at": [pd.Timestamp(posted)],
+    })
+
+
+def test_notice_known_by_issue_time_marks_its_quarters(config):
+    """A notice posted before 14:00 on D-1 for a postcode the area named earlier sets the notice inputs."""
+    inputs = _inputs(config)
+    events = inputs.events.copy()
+    events = events.assign(postcodes=np.where(events["area"] == AREA, "1234AB", None))
+    frame = _day(build_dataset(config, inputs.sdac, inputs.forecasts, inputs.weather, events, inputs.areas, None,
+                               _notice("1234AB", "2025-01-14 08:00")))
+    assert (frame["notice_day"] == 1).all() and (frame["notice_up"] == 1).all()
+    assert frame.loc[frame["notice_q"] == 1, "quarter"].tolist() == list(range(40, 48))
+
+
+def test_notice_posted_after_issue_time_is_not_a_feature(config):
+    """A notice posted after 14:00 on D-1 is not used for that delivery day."""
+    inputs = _inputs(config)
+    events = inputs.events.copy()
+    events = events.assign(postcodes=np.where(events["area"] == AREA, "1234AB", None))
+    frame = _day(build_dataset(config, inputs.sdac, inputs.forecasts, inputs.weather, events, inputs.areas, None,
+                               _notice("1234AB", "2025-01-14 15:00")))
+    assert (frame[["notice_day", "notice_q"]] == 0).all().all()

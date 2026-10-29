@@ -10,6 +10,8 @@ FORECAST_COLUMNS = MARKET_KEY + ["load_forecast_mw", "wind_forecast_mw", "solar_
 
 GOPACS_COLUMNS = ["event_id", "area", "direction", "operator", "postcodes", "mw", "start_time", "end_time", "announced_at"]
 
+NOTICE_COLUMNS = ["notice_id", "operator", "postcodes", "direction", "start_time", "end_time", "announced_at"]
+
 WEATHER_COLUMNS = ["cell", "time", "temperature_c", "radiation_wm2", "cloud_cover_pct", "wind_100m_kmh", "wind_10m_kmh"]
 
 LOCATION_COLUMNS =["area", "lat", "lon", "cell", "source"]

@@ -76,17 +76,25 @@ def cmd_fetch_weather(args: argparse.Namespace) -> None:
 
 
 def cmd_fetch_gopacs(args: argparse.Namespace) -> None:
-    """Fetch historical congestion-management announcements from GOPACS."""
+    """Fetch GOPACS announcements, or read a saved download, and write the requests and the notices."""
     from . import gopacs_source
 
     config = load_config(args.config)
-    records = gopacs_source.fetch_announcements()
+    if args.file:
+        with open(args.file, encoding="utf-8") as handle:
+            records = json.load(handle)
+    else:
+        records = gopacs_source.fetch_announcements()
     events = gopacs_source.to_events(records)
+    notices = gopacs_source.to_notices(records)
 
     path = config.resolve(config.paths.gopacs)
     path.parent.mkdir(parents=True, exist_ok=True)
     events.to_csv(path, index=False)
     print(f"gopacs: {path} ({len(events)} rows from {len(records)} announcements)")
+    notices_path = config.resolve(config.paths.notices)
+    notices.to_csv(notices_path, index=False)
+    print(f"notices: {notices_path} ({len(notices)} transport-restriction notices)")
 
 
 def cmd_locate(args: argparse.Namespace) -> None:
@@ -192,7 +200,8 @@ def build_parser() -> argparse.ArgumentParser:
     fetch_weather.add_argument("--end", required=True, help="last date YYYY-MM-DD, included")
     fetch_weather.set_defaults(func=cmd_fetch_weather)
 
-    fetch_gopacs = sub.add_parser("fetch-gopacs", help="fetch congestion events from GOPACS")
+    fetch_gopacs = sub.add_parser("fetch-gopacs", help="fetch congestion events and notices from GOPACS")
+    fetch_gopacs.add_argument("--file", help="read a saved announcements JSON instead of fetching")
     fetch_gopacs.set_defaults(func=cmd_fetch_gopacs)
 
     locate = sub.add_parser("locate", help="place GOPACS areas in grid cells")

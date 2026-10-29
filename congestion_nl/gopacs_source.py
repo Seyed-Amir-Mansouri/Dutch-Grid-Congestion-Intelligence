@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import urllib.request
 
 import numpy as np
@@ -14,6 +15,11 @@ PLACEHOLDERS = ("all", "all area", "all other areas", "on all voltage levels")
 # "Buiten" and "Alle gebieden buiten" mean "outside" and "all areas outside"
 NEGATIONS = ("buiten ", "outside ", "alle gebieden buiten")
 SIDES = (("requestAreaDescriptionBuyOrders", "feed-in"), ("requestAreaDescriptionSellOrders", "offtake"))
+# Enexis notices: "Periode: <start> - <end> ... Postcode: <list> Richting: Opwaarts|Neerwaarts"
+NOTICE_TIME = r"(\d\d-\d\d-\d{4} \d\d:\d\d|\d{4}-\d\d-\d\d \d\d:\d\d)"
+NOTICE_PERIOD = re.compile(rf"Periode: {NOTICE_TIME} - {NOTICE_TIME}")
+NOTICE_POSTCODES = re.compile(r"Postcode: (.*?) Richting")
+NOTICE_DIRECTION = re.compile(r"Richting: (\w+)")
 
 
 def _fetch_page(page: int, size: int) -> dict:
@@ -74,3 +80,28 @@ def to_events(records: list[dict]) -> pd.DataFrame:
                 rows.append((record["id"], area, direction, record.get("organisationName"), postcodes, mw, start, end, announced))
     frame = pd.DataFrame(rows, columns=schemas.GOPACS_COLUMNS)
     return frame.drop_duplicates(subset=["event_id", "area"]).reset_index(drop=True)
+
+
+def _notice_time(text: str) -> pd.Timestamp:
+    """Read a notice time written as 16-10-2026 08:00 or, before 2025, as 2024-09-01 15:00."""
+    return pd.to_datetime(text, format="%Y-%m-%d %H:%M" if text[4] == "-" else "%d-%m-%Y %H:%M")
+
+
+def to_notices(records: list[dict]) -> pd.DataFrame:
+    """Keep the free-text transport-restriction notices as one row each, with period, postcodes and direction."""
+    rows = []
+    for record in records:
+        text = record.get("message") or ""
+        if record.get("type") != "FREE_TEXT" or "transportrestrictie" not in text.lower():
+            continue
+        period, codes, direction = NOTICE_PERIOD.search(text), NOTICE_POSTCODES.search(text), NOTICE_DIRECTION.search(text)
+        created = record.get("createdTimestamp")
+        if not (period and codes and created):
+            continue
+        postcodes = sorted({p.strip().replace(" ", "") for p in codes.group(1).split(",") if p.strip()})
+        rows.append((
+            record["id"], record.get("organisationName"), ";".join(postcodes),
+            direction.group(1) if direction else None,
+            _notice_time(period.group(1)), _notice_time(period.group(2)), _to_local(created),
+        ))
+    return pd.DataFrame(rows, columns=schemas.NOTICE_COLUMNS)

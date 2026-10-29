@@ -15,6 +15,7 @@ class Inputs:
     sdac: pd.DataFrame
     forecasts: pd.DataFrame
     weather: pd.DataFrame
+    notices: pd.DataFrame
     events: pd.DataFrame
     areas: pd.DataFrame
 
@@ -47,6 +48,7 @@ def load_inputs(config: Config) -> Inputs:
         sdac=ingest.load_sdac(config.resolve(config.paths.sdac)),
         forecasts=ingest.load_forecasts(config.resolve(config.paths.forecasts)),
         weather=ingest.load_weather(config.resolve(config.paths.weather)),
+        notices=ingest.load_notices(config.resolve(config.paths.notices)),
         events=events,
         areas=area_table(locations, events),
     )
@@ -66,7 +68,9 @@ def label_cutoff(config: Config, events: pd.DataFrame, today: pd.Timestamp | Non
 
 def build(config: Config, inputs: Inputs, label_end: pd.Timestamp | None) -> pd.DataFrame:
     """Build the feature table for every active area and quarter-hour present in the inputs."""
-    return build_dataset(config, inputs.sdac, inputs.forecasts, inputs.weather, inputs.events, inputs.areas, label_end)
+    return build_dataset(
+        config, inputs.sdac, inputs.forecasts, inputs.weather, inputs.events, inputs.areas, label_end, inputs.notices
+    )
 
 
 def train(config: Config, dataset: pd.DataFrame) -> tuple[dict, dict]:

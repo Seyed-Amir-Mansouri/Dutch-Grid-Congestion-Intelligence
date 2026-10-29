@@ -125,3 +125,21 @@ def test_to_events_deduplicates_areas_named_on_both_sides():
     ]
     result = gopacs_source.to_events(records)
     assert result["area"].tolist() == ["Area1"]
+
+
+def test_to_notices_reads_both_date_formats():
+    start_ms, _ = _window()
+    text = "Transportrestrictie Enexis. Periode: {} - {} Postcode: 5211 AB, 5212CD Richting: Opwaarts"
+    records = [
+        {"id": "n1", "type": "FREE_TEXT", "organisationName": "Enexis", "createdTimestamp": start_ms,
+         "message": text.format("16-10-2026 08:00", "16-10-2026 18:00")},
+        {"id": "n2", "type": "FREE_TEXT", "organisationName": "Enexis", "createdTimestamp": start_ms,
+         "message": text.format("2024-09-01 15:00", "2024-09-02 00:00")},
+        _announcement("a", "CONGESTIONMANAGEMENT", sell="Area1", start_ms=start_ms, end_ms=start_ms),
+    ]
+    result = gopacs_source.to_notices(records)
+    assert list(result.columns) == schemas.NOTICE_COLUMNS
+    assert result["notice_id"].tolist() == ["n1", "n2"]
+    assert result["start_time"].tolist() == [pd.Timestamp("2026-10-16 08:00"), pd.Timestamp("2024-09-01 15:00")]
+    assert result["postcodes"].iloc[0] == "5211AB;5212CD"
+    assert result["direction"].iloc[0] == "Opwaarts"

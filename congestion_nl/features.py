@@ -67,6 +67,10 @@ WEATHER_FEATURES = (
 )
 FEATURE_COLUMNS += WEATHER_FEATURES
 
+# Enexis transport-restriction notices known at the issue time: count per day, by direction, and whether one covers the quarter
+NOTICE_FEATURES = ["notice_day", "notice_up", "notice_down", "notice_q"]
+FEATURE_COLUMNS += NOTICE_FEATURES
+
 
 def weather_features(weather: pd.DataFrame) -> pd.DataFrame:
     """Turn hourly cell forecasts into quarter-hour features with changes against the previous days."""
@@ -188,6 +192,49 @@ def add_direction_history(
     return frame
 
 
+def area_postcodes(events: pd.DataFrame) -> pd.DataFrame:
+    """Return each area's postcodes with the time each was first named in one of its requests."""
+    named = events.dropna(subset=["postcodes"])[["area", "postcodes", "announced_at"]]
+    named = named.assign(postcode=named["postcodes"].astype(str).str.split(";")).explode("postcode")
+    named["postcode"] = named["postcode"].str.strip().str.replace(" ", "")
+    return named[named["postcode"] != ""].groupby(["area", "postcode"], as_index=False)["announced_at"].min()
+
+
+def notice_features(notices: pd.DataFrame, events: pd.DataFrame, issue_hour: int) -> pd.DataFrame:
+    """Per area, delivery day and quarter-hour, the notices posted before the issue time on D-1 for the area's postcodes."""
+    codes = area_postcodes(events)
+    rows = []
+    for notice in notices.itertuples():
+        # only postcodes the area had named before the notice was posted, so later requests cannot leak in
+        known = codes[codes["announced_at"] < notice.announced_at]
+        listed = set(str(notice.postcodes).split(";"))
+        # older notices give 4-digit postcodes, which match the start of the areas' full ones
+        short = {p for p in listed if len(p) == 4}
+        match = known["postcode"].isin(listed) | known["postcode"].str[:4].isin(short)
+        days = pd.date_range(notice.start_time.normalize(), (notice.end_time - pd.Timedelta(minutes=1)).normalize())
+        issued = days - pd.Timedelta(days=1) + pd.Timedelta(hours=issue_hour)
+        days = days[notice.announced_at < issued]
+        rows += [(area, day, notice) for area in known.loc[match, "area"].unique() for day in days]
+    if not rows:
+        return pd.DataFrame()
+
+    out = []
+    for (day, area), group in pd.DataFrame(rows, columns=["area", "delivery_date", "notice"]).groupby(["delivery_date", "area"]):
+        found = {n.notice_id: n for n in group["notice"]}.values()
+        starts = day + pd.to_timedelta(np.arange(96) * 15, unit="min")
+        covered = np.zeros(96, dtype=bool)
+        for n in found:
+            covered |= (starts >= n.start_time) & (starts < n.end_time)
+        out.append(pd.DataFrame({
+            "delivery_date": day, "area": area, "quarter": np.arange(96),
+            "notice_day": len(found),
+            "notice_up": sum(n.direction == "Opwaarts" for n in found),
+            "notice_down": sum(n.direction == "Neerwaarts" for n in found),
+            "notice_q": covered.astype(int),
+        }))
+    return pd.concat(out, ignore_index=True)
+
+
 def build_dataset(
     config: Config,
     sdac: pd.DataFrame,
@@ -196,6 +243,7 @@ def build_dataset(
     events: pd.DataFrame,
     areas: pd.DataFrame,
     label_end: pd.Timestamp | None,
+    notices: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """Join inputs and build features for active areas, with the target set for dates up to label_end."""
     settings = config.features
@@ -224,6 +272,12 @@ def build_dataset(
     frame["area_slot_week"] = frame["area_slot_week"].fillna(0)
     frame = add_direction_history(config, frame, events, areas, market["delivery_date"].max())
     frame = frame.merge(weather_features(weather), on=schemas.MARKET_KEY + ["cell"], how="left")
+    known = notice_features(notices, events, settings.issue_hour) if notices is not None else pd.DataFrame()
+    if known.empty:
+        frame[NOTICE_FEATURES] = 0.0
+    else:
+        frame = frame.merge(known, on=schemas.KEY, how="left")
+        frame[NOTICE_FEATURES] = frame[NOTICE_FEATURES].astype(float).fillna(0)
     frame = frame.sort_values(schemas.KEY).reset_index(drop=True)
 
     labelled = label_grid(frame[schemas.KEY], events)

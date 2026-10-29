@@ -17,6 +17,7 @@ class Paths:
     forecasts: Path
     weather: Path
     gopacs: Path
+    notices: Path
     postcodes: Path
     places: Path
     csc_report: Path
