@@ -1,0 +1,61 @@
+{% extends "console/base.html" %}
+{% block title %}Performance{% endblock %}
+{% block eyebrow %}Forecast quality{% endblock %}
+{% block heading %}Performance{% endblock %}
+{% block lede %}Flags at threshold {{ threshold }} against GOPACS requests. The monthly record uses out-of-sample scores: each month predicted by a model trained only on data up to two days before it.{% endblock %}
+
+{% block content %}
+{% if recent %}
+<div class="kpis">
+  <div class="kpi kpi-red"><span class="kpi-label">Flags correct</span><span class="kpi-value">{% widthratio recent.precision 1 100 %}<small>%</small></span><span class="kpi-note">{{ recent.correct }} of {{ recent.flagged }} · {{ recent.from|date:"M" }}–{{ recent.to|date:"M Y" }}</span></div>
+  <div class="kpi"><span class="kpi-label">Requests caught</span><span class="kpi-value">{% widthratio recent.recall 1 100 %}<small>%</small></span><span class="kpi-note">area-days with a request that were flagged</span></div>
+  <div class="kpi"><span class="kpi-label">Request area-days</span><span class="kpi-value">{{ recent.requests }}</span><span class="kpi-note">last three months</span></div>
+  <div class="kpi kpi-dark"><span class="kpi-label">Inspector veto</span><span class="kpi-value small">Applied live</span><span class="kpi-note">monthly record shows the predictor alone</span></div>
+</div>
+
+<div class="grid-2">
+  <section class="panel">
+    <header class="panel-head"><h2>Flags per month</h2>
+      <ul class="legend inline"><li><i class="sw" style="background:#41609e"></i>Correct</li><li><i class="sw" style="background:#c9821b"></i>Wrong</li></ul></header>
+    <div class="chart-wrap">{{ flag_chart }}</div>
+  </section>
+  <section class="panel">
+    <header class="panel-head"><h2>Share of flags correct</h2></header>
+    <div class="chart-wrap">{{ precision_chart }}</div>
+  </section>
+</div>
+{% endif %}
+
+<div class="grid-2">
+  <section class="panel">
+    <header class="panel-head"><h2>Live forecasts</h2><span class="muted">settled days from the ledger</span></header>
+    {% if track %}<div class="table-scroll"><table class="table">
+      <thead><tr><th>Day</th><th class="num">Shown ✓</th><th class="num">Shown ✕</th><th class="num">Vetoed ✕</th><th class="num">Vetoed ✓</th><th class="num">Missed</th></tr></thead>
+      <tbody>{% for t in track %}<tr><td class="mono">{{ t.delivery_date|date:"D j M" }}</td><td class="num mono">{{ t.shown_correct }}</td><td class="num mono">{{ t.shown_wrong }}</td>
+        <td class="num mono">{{ t.vetoed_wrong }}</td><td class="num mono">{{ t.vetoed_correct }}</td><td class="num mono">{{ t.missed }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+    <p class="muted small pad">✓ the area had a request · ✕ it had none. A good veto removes ✕ flags.</p>
+    {% else %}<p class="muted pad">No settled forecasts yet. Issued forecasts appear here once their day's GOPACS record is complete.</p>{% endif %}
+  </section>
+  <section class="panel">
+    <header class="panel-head"><h2>Monthly record</h2><span class="muted">predictor, out of sample</span></header>
+    {% if monthly %}<div class="table-scroll tall"><table class="table">
+      <thead><tr><th>Month</th><th class="num">Flags</th><th class="num">Correct</th><th class="num">Wrong</th><th class="num">Requests</th><th class="num">Missed</th></tr></thead>
+      <tbody>{% for m in monthly %}<tr><td class="mono">{{ m.month|date:"M Y" }}</td><td class="num mono">{{ m.flagged }}</td><td class="num mono">{{ m.correct }}</td>
+        <td class="num mono">{{ m.wrong }}</td><td class="num mono">{{ m.requests }}</td><td class="num mono">{{ m.missed }}</td></tr>{% endfor %}</tbody>
+    </table></div>{% else %}<p class="muted pad">Train the model to build the monthly record.</p>{% endif %}
+  </section>
+</div>
+
+{% if validation %}
+<section class="panel">
+  <header class="panel-head"><h2>Validation history</h2><span class="muted">from the validate step</span></header>
+  <div class="table-scroll"><table class="table">
+    <thead><tr><th>As of</th><th>Window</th><th class="num">Flagged</th><th class="num">Correct</th><th class="num">Missed</th><th class="num">Skill</th><th>Alert</th></tr></thead>
+    <tbody>{% for v in validation %}<tr><td class="mono">{{ v.as_of|slice:":10" }}</td><td class="mono">{{ v.window_start }} – {{ v.label_end }}</td>
+      <td class="num mono">{{ v.window_flagged }}</td><td class="num mono">{{ v.window_correct }}</td><td class="num mono">{{ v.window_missed }}</td>
+      <td class="num mono">{{ v.window_skill|floatformat:3 }}</td><td>{% if v.alert %}<span class="tag tag-no">▲ Below minimum</span>{% else %}<span class="tag tag-yes">OK</span>{% endif %}</td></tr>{% endfor %}</tbody>
+  </table></div>
+</section>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,20 @@
+<div class="steps">
+{% for s in steps %}
+  <form class="step step-{{ s.kind }}{% if s.lead %} step-lead{% endif %}" method="post" action="/operations/run/{{ s.key }}">
+    {% csrf_token %}
+    <div class="step-head">
+      <span class="step-kind">{% if s.kind == 'chain' %}Routine{% elif s.kind == 'data' %}Data{% else %}Model{% endif %}</span>
+      <h3>{{ s.title }}</h3>
+    </div>
+    <p>{{ s.text }}</p>
+    {% if s.fields %}<div class="fields">
+      {% for f in s.fields %}<label><span>{{ f.label }}</span><input type="{{ f.type }}" name="{{ f.name }}" value="{{ f.value|date:'Y-m-d'|default:f.value }}" required></label>{% endfor %}
+    </div>{% endif %}
+    {% if s.needs_key and not entsoe_key %}
+      <button class="btn btn-ghost" disabled>Needs ENTSOE_API_KEY</button>
+    {% else %}
+      <button class="btn {% if s.lead %}btn-red{% else %}btn-dark{% endif %}" {% if running %}disabled{% endif %}>Run</button>
+    {% endif %}
+  </form>
+{% endfor %}
+</div>

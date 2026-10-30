@@ -1,0 +1,49 @@
+{% if selected %}
+<section class="panel process-panel" id="process" data-job="{{ selected.id }}" data-status="{{ selected.status }}">
+  <header class="process-head">
+    <div>
+      <span class="process-eyebrow">{% if selected.status == 'running' %}Now running{% else %}Last job{% endif %}</span>
+      <h2>{{ selected.title }}</h2>
+      <span class="muted small">Started {{ selected.started|slice:":10" }} {{ selected.started|slice:"11:16" }}</span>
+    </div>
+    <div class="process-summary">
+      <div><span class="ps-label">Stage</span><span class="ps-value" id="ps-stage">–</span></div>
+      <div><span class="ps-label">Elapsed</span><span class="ps-value mono" id="ps-elapsed">–</span></div>
+      <div><span class="ps-label">Remaining</span><span class="ps-value mono" id="ps-left">–</span></div>
+      <span class="status status-{{ selected.status }}" id="job-status">{{ selected.status }}</span>
+    </div>
+  </header>
+  <div class="process-overall"><span id="ps-bar"></span></div>
+  <ol class="stages" id="stages"></ol>
+</section>
+{% endif %}
+
+<div class="grid-2 ops">
+  <section class="panel">
+    <header class="panel-head"><h2>Job log</h2>
+      {% if selected %}<label class="follow"><input type="checkbox" id="follow" checked> Follow output</label>{% endif %}
+    </header>
+    {% if selected %}
+      <pre class="console" id="log">Loading…</pre>
+    {% else %}
+      <p class="muted pad">No jobs run yet.</p>
+    {% endif %}
+  </section>
+  <div class="stack">
+    <section class="panel">
+      <header class="panel-head"><h2>Recent jobs</h2></header>
+      {% if recent %}<table class="table compact"><tbody>
+        {% for j in recent %}<tr><td><a href="?job={{ j.id }}">{{ j.title }}</a></td><td class="mono muted">{{ j.started|slice:"5:10" }} {{ j.started|slice:"11:16" }}</td>
+          <td><span class="status status-{{ j.status }}">{{ j.status }}</span></td></tr>{% endfor %}
+      </tbody></table>{% else %}<p class="muted pad">None yet.</p>{% endif %}
+    </section>
+    <section class="panel">
+      <header class="panel-head"><h2>Data files</h2></header>
+      <table class="table compact"><tbody>
+        {% for f in files %}<tr><td>{{ f.label }}<small class="block muted mono">{{ f.path }}</small></td>
+          <td class="mono muted">{% if f.exists %}{{ f.changed|date:"j M H:i" }}{% else %}missing{% endif %}</td>
+          <td class="mono num">{% if f.exists %}{{ f.size|filesizeformat }}{% endif %}</td></tr>{% endfor %}
+      </tbody></table>
+    </section>
+  </div>
+</div>

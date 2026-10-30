@@ -1,0 +1,75 @@
+{% extends "console/base.html" %}
+{% load static %}
+{% block title %}Forecast{% endblock %}
+{% block eyebrow %}Day-ahead congestion forecast{% endblock %}
+{% block heading %}{% if day %}{{ day|date:"l j F Y" }}{% else %}No forecast yet{% endif %}{% endblock %}
+{% block lede %}{% if day %}Issued {{ issued|date:"j M Y, H:i" }} · flags at peak probability ≥ {{ threshold }}, checked by the inspector before they are shown.{% else %}Run the daily forecast from Operations to issue the first one.{% endif %}{% endblock %}
+{% block hero_side %}{% if days %}
+<div class="daypick">
+  {% if previous %}<a class="btn btn-ghost" href="?day={{ previous|date:'Y-m-d' }}" aria-label="Previous day">‹</a>{% else %}<span class="btn btn-ghost off">‹</span>{% endif %}
+  <form method="get"><select name="day" onchange="this.form.submit()" aria-label="Delivery day">
+    {% for d in days %}<option value="{{ d|date:'Y-m-d' }}" {% if d == day %}selected{% endif %}>{{ d|date:"D j M Y" }}</option>{% endfor %}
+  </select></form>
+  {% if next %}<a class="btn btn-ghost" href="?day={{ next|date:'Y-m-d' }}" aria-label="Next day">›</a>{% else %}<span class="btn btn-ghost off">›</span>{% endif %}
+</div>{% endif %}{% endblock %}
+
+{% block content %}
+{% if not days %}
+<div class="panel empty">
+  <h2>No forecasts in the ledger</h2>
+  <p>The forecast ledger is empty. Start the daily run to refresh the data and score tomorrow's areas.</p>
+  <a class="btn btn-red" href="/operations">Go to Operations</a>
+</div>
+{% else %}
+<div class="kpis">
+  <div class="kpi kpi-red"><span class="kpi-label">Areas on alert</span><span class="kpi-value">{{ alerts }}</span><span class="kpi-note">flags kept by the inspector</span></div>
+  <div class="kpi"><span class="kpi-label">Vetoed</span><span class="kpi-value">{{ vetoed }}</span><span class="kpi-note">flags the inspector judged likely wrong</span></div>
+  <div class="kpi"><span class="kpi-label">Active areas</span><span class="kpi-value">{{ active }}</span><span class="kpi-note">a request in the last 90 days</span></div>
+  {% if settled %}
+  <div class="kpi kpi-dark"><span class="kpi-label">Outcome</span><span class="kpi-value">{{ outcome_correct }}<small>/{{ alerts }}</small></span><span class="kpi-note">alerts that got a request · {{ outcome_requests }} areas had one</span></div>
+  {% else %}
+  <div class="kpi kpi-dark"><span class="kpi-label">Outcome</span><span class="kpi-value small">Pending</span><span class="kpi-note">GOPACS record not complete yet</span></div>
+  {% endif %}
+</div>
+
+<div class="grid-2 grid-map">
+  <section class="panel map-panel">
+    <header class="panel-head"><h2>Grid map</h2>
+      <button type="button" class="map-reset" id="map-reset">Reset view</button></header>
+    <div class="live-map" id="map" aria-label="Map of GOPACS areas by forecast status"></div>
+    <ul class="legend">{% for icon, label in legend %}<li>{{ icon }}{{ label }}</li>{% endfor %}
+      <li class="muted small">Glow strength follows the peak probability · click an area to light it up</li></ul>
+  </section>
+
+  <section class="panel">
+    <header class="panel-head"><h2>Flagged areas</h2><span class="muted">{{ flagged|length }} of {{ active }}</span></header>
+    {% if flagged %}
+    <div class="table-scroll"><table class="table">
+      <thead><tr><th></th><th>Area</th><th>Peak</th><th>Inspector</th><th>Risk window</th>{% if settled %}<th>Request</th>{% endif %}</tr></thead>
+      <tbody>
+      {% for r in flagged %}
+        <tr class="row-{{ r.status }} row-pick" data-point="{{ r.id }}" tabindex="0">
+          <td class="icon-cell" title="{% if r.status == 'alert' %}Flag kept{% else %}Vetoed{% endif %}">{{ r.icon }}</td>
+          <td class="area"><span>{{ r.area }}</span><small>{{ r.cell|default:"not located" }}</small></td>
+          <td class="meter-cell">{{ r.peak_meter }}</td>
+          <td class="meter-cell">{{ r.inspector_meter }}</td>
+          <td class="mono">{{ r.window_start }}–{{ r.window_end }}</td>
+          {% if settled %}<td>{% if r.had_request == 1 %}<span class="tag tag-yes">✓ Yes</span>{% else %}<span class="tag tag-no">✕ No</span>{% endif %}</td>{% endif %}
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    {% else %}
+    <p class="muted pad">No area reached the flag threshold for this day.</p>
+    {% endif %}
+  </section>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block head %}<link rel="stylesheet" href="{% static 'console/vendor/leaflet/leaflet.css' %}">{% endblock %}
+{% block scripts %}{% if days %}
+{{ map_points|json_script:"map-points" }}
+<script src="{% static 'console/vendor/leaflet/leaflet.js' %}"></script>
+<script src="{% static 'console/map.js' %}"></script>
+{% endif %}{% endblock %}

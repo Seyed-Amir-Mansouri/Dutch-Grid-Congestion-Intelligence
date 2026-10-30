@@ -1,0 +1,54 @@
+{% load static %}<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Congestion Intelligence{% endblock %} · Dutch grid</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Roboto+Condensed:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{% static 'console/app.css' %}">
+{% block head %}{% endblock %}
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="/">
+    <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+    <span class="brand-text"><b>Congestion</b> Intelligence<small>Dutch grid · GOPACS</small></span>
+  </a>
+  <nav class="nav">
+    <a href="/" class="{% if page == 'forecast' %}on{% endif %}">Forecast</a>
+    <a href="/activity" class="{% if page == 'activity' %}on{% endif %}">Grid activity</a>
+    <a href="/performance" class="{% if page == 'performance' %}on{% endif %}">Performance</a>
+    <a href="/model" class="{% if page == 'model' %}on{% endif %}">Model</a>
+    <a href="/operations" class="{% if page == 'operations' %}on{% endif %}">Operations</a>
+  </nav>
+  <div class="top-status">
+    {% if running %}<a class="pill pill-run" href="/operations?job={{ running.id }}"><span class="pulse"></span>{{ running.title }}</a>{% endif %}
+    {% if not model_version %}<span class="pill pill-warn">No model trained</span>{% endif %}
+  </div>
+</header>
+
+<section class="hero">
+  <div class="hero-inner">
+    <div>
+      <p class="eyebrow">{% block eyebrow %}{% endblock %}</p>
+      <h1>{% block heading %}{% endblock %}</h1>
+      <p class="lede">{% block lede %}{% endblock %}</p>
+    </div>
+    <div class="hero-side">{% block hero_side %}{% endblock %}</div>
+  </div>
+</section>
+
+<main class="wrap">
+{% block content %}{% endblock %}
+</main>
+
+<footer class="foot">
+  <span>Congestion Intelligence · next-day congestion risk per GOPACS area</span>
+  <span>Predictor + inspector veto · data: GOPACS, ENTSO-E, Open-Meteo</span>
+</footer>
+<div id="tip" class="tip" role="tooltip" hidden></div>
+<script src="{% static 'console/app.js' %}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>
