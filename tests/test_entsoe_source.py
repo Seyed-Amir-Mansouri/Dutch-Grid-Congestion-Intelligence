@@ -96,3 +96,14 @@ def test_fetch_sdac_merges_the_repeated_hour_on_the_autumn_clock_change():
     assert len(result) == 96
     assert not result.duplicated(schemas.MARKET_KEY).any()
     assert (result.loc[result["quarter"].between(8, 11), "price_eur_mwh"] == 2.5).all()
+
+
+def test_merge_keeps_saved_history_and_takes_new_values_for_repeated_quarters():
+    saved = pd.DataFrame({"delivery_date": ["2026-10-01", "2026-10-01"], "quarter": [0, 1], "price_eur_mwh": [10.0, 11.0]})
+    fetched = pd.DataFrame({"delivery_date": pd.to_datetime(["2026-10-01", "2026-10-02"]), "quarter": [1, 0],
+                            "price_eur_mwh": [99.0, 12.0]})
+
+    merged = entsoe_source.merge(saved, fetched)
+
+    assert merged["price_eur_mwh"].tolist() == [10.0, 99.0, 12.0]
+    assert merged[schemas.MARKET_KEY].duplicated().sum() == 0

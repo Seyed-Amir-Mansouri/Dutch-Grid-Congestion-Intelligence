@@ -31,7 +31,7 @@ def cmd_demo(args: argparse.Namespace) -> None:
 
 
 def cmd_fetch_entsoe(args: argparse.Namespace) -> None:
-    """Fetch SDAC prices, net position and forecasts from ENTSO-E and write CSVs."""
+    """Fetch SDAC prices, net position and forecasts from ENTSO-E and merge them into the CSVs."""
     from . import entsoe_source
 
     api_key = os.environ.get("ENTSOE_API_KEY")
@@ -49,6 +49,11 @@ def cmd_fetch_entsoe(args: argparse.Namespace) -> None:
 
     sdac_path = config.resolve(config.paths.sdac)
     forecasts_path = config.resolve(config.paths.forecasts)
+    # a short fetch adds to the saved history instead of replacing it
+    if sdac_path.exists():
+        sdac = entsoe_source.merge(pd.read_csv(sdac_path), sdac)
+    if forecasts_path.exists():
+        forecasts = entsoe_source.merge(pd.read_csv(forecasts_path), forecasts)
     sdac_path.parent.mkdir(parents=True, exist_ok=True)
     forecasts_path.parent.mkdir(parents=True, exist_ok=True)
     sdac.to_csv(sdac_path, index=False)
@@ -194,7 +199,7 @@ def build_parser() -> argparse.ArgumentParser:
     demo.add_argument("--seed", type=int, default=7)
     demo.set_defaults(func=cmd_demo)
 
-    fetch = sub.add_parser("fetch-entsoe", help="fetch NL SDAC and forecast data from ENTSO-E")
+    fetch = sub.add_parser("fetch-entsoe", help="fetch NL SDAC and forecast data from ENTSO-E into the saved files")
     fetch.add_argument("--start", required=True, help="start date YYYY-MM-DD")
     fetch.add_argument("--end", required=True, help="end date YYYY-MM-DD")
     fetch.set_defaults(func=cmd_fetch_entsoe)

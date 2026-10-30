@@ -69,3 +69,10 @@ def fetch_forecasts(client, start: pd.Timestamp, end: pd.Timestamp) -> pd.DataFr
     merged = load_frame.merge(wind_frame, on=schemas.MARKET_KEY, how="outer")
     merged = merged.merge(solar_frame, on=schemas.MARKET_KEY, how="outer")
     return merged.sort_values(schemas.MARKET_KEY).reset_index(drop=True)
+
+
+def merge(old: pd.DataFrame, new: pd.DataFrame) -> pd.DataFrame:
+    """Add newly fetched quarter-hours to a saved table; new values replace saved ones for the same quarter."""
+    old = old.assign(delivery_date=pd.to_datetime(old["delivery_date"]))
+    joined = pd.concat([old, new], ignore_index=True).drop_duplicates(schemas.MARKET_KEY, keep="last")
+    return joined.sort_values(schemas.MARKET_KEY).reset_index(drop=True)
