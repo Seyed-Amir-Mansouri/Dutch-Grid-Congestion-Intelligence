@@ -52,6 +52,12 @@ class Labels:
 
 
 @dataclass(frozen=True)
+class Inspector:
+    start_date: pd.Timestamp
+    veto_cut: float
+
+
+@dataclass(frozen=True)
 class Validation:
     window_days: int
     min_skill: float
@@ -65,6 +71,7 @@ class Config:
     features: Features
     labels: Labels
     model: Settings
+    inspector: Inspector
     validation: Validation
 
     def resolve(self, path: Path) -> Path:
@@ -90,5 +97,9 @@ def load_config(path: str | Path = DEFAULT_CONFIG) -> Config:
         features=Features(**raw["features"]),
         labels=Labels(**raw["labels"]),
         model=Settings(**raw["model"]),
+        inspector=Inspector(
+            start_date=pd.Timestamp(raw["inspector"]["start_date"]),
+            veto_cut=float(raw["inspector"]["veto_cut"]),
+        ),
         validation=Validation(**raw["validation"]),
     )

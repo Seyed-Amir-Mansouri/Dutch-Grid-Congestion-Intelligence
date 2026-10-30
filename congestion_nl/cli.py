@@ -139,7 +139,8 @@ def cmd_predict(args: argparse.Namespace) -> None:
     config = load_config(args.config)
     bundle = estimator.load(config.resolve(config.paths.model_dir))
     inputs = pipeline.load_inputs(config)
-    dataset = pipeline.build(config, inputs, None)
+    # settled labels are needed for the inspector's track record of the predictor
+    dataset = pipeline.build(config, inputs, pipeline.label_cutoff(config, inputs.events))
 
     if args.date:
         day = _timestamp(args.date)
@@ -150,14 +151,17 @@ def cmd_predict(args: argparse.Namespace) -> None:
 
     ledger_path = config.resolve(config.paths.predictions)
     ledger.append(predictions, ledger_path)
-    areas = pipeline.area_forecast(bundle, predictions)
+    areas = pipeline.area_forecast(bundle, predictions, config, dataset)
     area_path = config.resolve(config.paths.area_predictions)
     ledger.append(areas, area_path)
 
     risky = areas[areas["day_flag"] == 1]
-    print(f"{day:%Y-%m-%d}: {len(risky)} of {len(areas)} active areas flagged at threshold {bundle['day_threshold']}")
+    shown = int(areas["shown"].sum())
+    print(f"{day:%Y-%m-%d}: {len(risky)} of {len(areas)} active areas flagged at threshold {bundle['day_threshold']}, "
+          f"{shown} kept by the inspector")
     if len(risky):
-        print(risky[["area", "peak_probability", "expected_quarters", "window_start", "window_end"]].round(2).to_string(index=False))
+        columns = ["area", "peak_probability", "inspector_confidence", "shown", "window_start", "window_end"]
+        print(risky[columns].round(2).to_string(index=False))
     print(f"logged: {ledger_path}, {area_path}")
 
 

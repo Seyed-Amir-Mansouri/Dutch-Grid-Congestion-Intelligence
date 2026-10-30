@@ -3,9 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
+import numpy as np
 import pandas as pd
 
-from . import estimator, ingest, schemas
+from . import estimator, ingest, inspector, schemas
 from .config import Config
 from .features import FEATURE_COLUMNS, area_table, build_dataset
 
@@ -74,8 +75,16 @@ def build(config: Config, inputs: Inputs, label_end: pd.Timestamp | None) -> pd.
 
 
 def train(config: Config, dataset: pd.DataFrame) -> tuple[dict, dict]:
-    """Train the classifier on the labelled rows of a dataset."""
-    return estimator.train(dataset, FEATURE_COLUMNS, config.model)
+    """Train the classifier on the labelled rows of a dataset, then the inspector that vetoes its flags."""
+    bundle, report = estimator.train(dataset, FEATURE_COLUMNS, config.model)
+    cache = config.resolve(config.paths.model_dir) / inspector.WALK_FORWARD_FILE
+    past = inspector.walk_forward(config, dataset, FEATURE_COLUMNS, cache)
+    bundle["inspector"] = inspector.fit(config, past, dataset, bundle["day_threshold"])
+    veto = bundle["inspector"]
+    report["inspector"] = (
+        {key: veto[key] for key in ("trained_flags", "trained_correct", "cut")} if veto else "too few past flags; not trained"
+    )
+    return bundle, report
 
 
 def predict_day(
@@ -97,9 +106,18 @@ def predict_day(
     return rows[schemas.PREDICTION_COLUMNS].reset_index(drop=True)
 
 
-def area_forecast(bundle: dict, predictions: pd.DataFrame) -> pd.DataFrame:
-    """Summarise quarter-hour predictions per area for the day, most likely areas first."""
+def area_forecast(
+    bundle: dict,
+    predictions: pd.DataFrame,
+    config: Config | None = None,
+    dataset: pd.DataFrame | None = None,
+) -> pd.DataFrame:
+    """Summarise quarter-hour predictions per area for the day, most likely areas first, with the inspector's verdict."""
     days = estimator.area_days(predictions, bundle["day_threshold"])
+    if config is not None and dataset is not None:
+        days = inspector.judge(config, bundle, dataset, days)
+    else:
+        days = days.assign(inspector_confidence=np.nan, shown=days["day_flag"])
     days["issued_at"] = predictions["issued_at"].iloc[0]
     days["model_version"] = bundle["model_version"]
     days = days.sort_values("peak_probability", ascending=False)

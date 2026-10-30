@@ -23,4 +23,5 @@ PREDICTION_COLUMNS = KEY + ["issued_at", "model_version", "risk_probability"]
 AREA_DAY_COLUMNS = [
     "delivery_date", "area", "issued_at", "model_version",
     "peak_probability", "expected_quarters", "window_start", "window_end", "day_flag",
+    "inspector_confidence", "shown",
 ]

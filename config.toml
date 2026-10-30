@@ -40,6 +40,10 @@ min_samples_leaf = 4000
 l2_regularization = 5.0
 random_state = 42
 
+[inspector]
+start_date = "2024-09-01"
+veto_cut = 0.5
+
 [validation]
 window_days = 14
 min_skill = 0.0
