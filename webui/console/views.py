@@ -97,13 +97,15 @@ def operations(request):
 @require_POST
 def run(request, key: str):
     """Start a step and show its log."""
-    titles = {s["key"]: s["title"] for s in jobs.steps()}
-    if key not in titles:
+    found = {s["key"]: s for s in jobs.steps()}
+    if key not in found:
         raise Http404
     if key == "entsoe" and not jobs.entsoe_key_set():
         return redirect("/operations?" + urlencode({"error": "Set ENTSOE_API_KEY before starting the web UI"}))
+    if found[key]["missing"]:
+        return redirect("/operations?" + urlencode({"error": "; ".join(found[key]["missing"])}))
     try:
-        meta = jobs.start(key, titles[key], request.POST.dict())
+        meta = jobs.start(key, found[key]["title"], request.POST.dict())
     except (RuntimeError, ValueError, KeyError) as error:
         return redirect("/operations?" + urlencode({"error": str(error) or "Missing form value"}))
     return redirect(f"/operations?job={meta['id']}")

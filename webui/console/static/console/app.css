@@ -188,6 +188,10 @@ input[type=date]:focus, select:focus, .btn:focus-visible { outline: 2px solid va
 .fields label { display: grid; gap: 4px; font: 500 10.5px var(--cond); text-transform: uppercase; letter-spacing: 1.2px; color: var(--muted); }
 .step-lead .fields label { color: #aab3c7; }
 .step .btn { align-self: flex-start; }
+.step-warn { list-style: none; margin: 0; padding: 8px 10px; display: grid; gap: 3px; font-size: 12px; color: #7a4f0e;
+  background: #fdf3e2; border-left: 3px solid var(--amber); border-radius: var(--radius); }
+.step-warn li::before { content: "⚠ "; }
+.step-lead .step-warn { color: #f3c47e; background: rgba(201,130,27,.14); }
 .keystate { display: inline-flex; align-items: center; gap: 10px; padding: 8px 14px; border: 1px solid rgba(255,255,255,.2); border-radius: var(--radius); font-size: 13px; color: #dbe0ea; }
 .keystate .dot { width: 9px; height: 9px; border-radius: 50%; }
 .keystate.ok .dot { background: #5fd07a; } .keystate.warn .dot { background: #f6aa1c; }

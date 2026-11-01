@@ -21,6 +21,30 @@ STAGES = {
     "predict": ("Forecast", "Score areas, apply the veto"),
     "validate": ("Validate", "Score against GOPACS"),
 }
+# files the steps read: a label and the step that makes the file, or None for reference files
+FILES = {
+    "gopacs": ("GOPACS requests", "Update GOPACS"),
+    "weather": ("Weather forecasts", "Update weather"),
+    "sdac": ("Day-ahead market", "Update market data"),
+    "forecasts": ("System forecasts", "Update market data"),
+    "locations": ("Area locations", "Locate areas"),
+    "model": ("Trained model", "Retrain model"),
+    "area_predictions": ("Area forecasts ledger", "Daily forecast run or Issue forecast"),
+    "postcodes": ("GeoNames postcodes", None),
+    "places": ("GeoNames places", None),
+    "csc_report": ("Enexis CSC report", None),
+    "manual_locations": ("Manual locations", None),
+}
+INPUTS = ["gopacs", "weather", "sdac", "forecasts", "locations"]
+NEEDS = {
+    "gopacs": [],
+    "weather": ["locations"],
+    "entsoe": [],
+    "locate": ["gopacs", "postcodes", "places", "csc_report", "manual_locations"],
+    "train": INPUTS,
+    "predict": ["model"] + INPUTS,
+    "validate": ["area_predictions"] + INPUTS,
+}
 SECRET = re.compile(r"(securityToken=)[^&\s\"']+", re.IGNORECASE)
 _lock = threading.Lock()
 _running: dict = {}
@@ -42,7 +66,7 @@ def steps() -> list[dict]:
 
     today = _today()
     tomorrow = today + timedelta(days=1)
-    return [
+    found = [
         {"key": "daily", "title": "Daily forecast run", "kind": "chain", "lead": True,
          "text": "Refresh GOPACS, weather and market data, then issue tomorrow's forecast with the inspector's verdict.",
          "fields": [{"name": "date", "label": "Delivery day", "type": "date", "value": tomorrow}]},
@@ -68,11 +92,42 @@ def steps() -> list[dict]:
          "text": "Score settled forecasts against GOPACS requests and append to the validation history.",
          "fields": [{"name": "as_of", "label": "As of", "type": "date", "value": today}]},
     ]
+    for step in found:
+        step["missing"] = missing(step["key"])
+    return found
 
 
 def entsoe_key_set() -> bool:
     """Whether the ENTSO-E key is in the environment; its value is never read here."""
     return bool(os.environ.get("ENTSOE_API_KEY"))
+
+
+def needs(key: str) -> list[str]:
+    """The files a step reads before it can run."""
+    if key == "daily":
+        # the chain writes the GOPACS and weather files itself, and the market files when the key is set
+        return ["locations", "model"] + ([] if entsoe_key_set() else ["sdac", "forecasts"])
+    return NEEDS[key]
+
+
+def missing(key: str) -> list[str]:
+    """A warning for each file a step needs that is not there, naming the step that makes it."""
+    from congestion_nl import estimator
+
+    from . import data
+
+    out = []
+    for name in needs(key):
+        file = data.model_dir() / estimator.MODEL_FILE if name == "model" else data.path(name)
+        if file.exists():
+            continue
+        label, maker = FILES[name]
+        if maker:
+            out.append(f"{label} missing: run {maker} first")
+        else:
+            where = file.relative_to(data.CONFIG.root) if file.is_relative_to(data.CONFIG.root) else file
+            out.append(f"{label} missing: add {where.as_posix()}")
+    return out
 
 
 def commands(key: str, form: dict) -> list[list[str]]:

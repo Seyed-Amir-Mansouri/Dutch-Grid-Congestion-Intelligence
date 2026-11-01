@@ -12,9 +12,12 @@
     </div>{% endif %}
     {% if s.needs_key and not entsoe_key %}
       <button class="btn btn-ghost" disabled>Needs ENTSOE_API_KEY</button>
+    {% elif s.missing %}
+      <button class="btn btn-ghost" disabled>Run</button>
     {% else %}
       <button class="btn {% if s.lead %}btn-red{% else %}btn-dark{% endif %}" {% if running %}disabled{% endif %}>Run</button>
     {% endif %}
+    {% if s.missing %}<ul class="step-warn" role="note">{% for m in s.missing %}<li>{{ m }}</li>{% endfor %}</ul>{% endif %}
   </form>
 {% endfor %}
 </div>
