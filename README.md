@@ -1,4 +1,4 @@
-# Dutch Grid Congestion Risk
+# Day-Ahead Grid Congestion Forecaster Tool for the Netherlands
 
 This estimator predicts which GOPACS congestion areas in the Netherlands will get a congestion-management request on the next day. The area is the congested area named in the request, where the grid operator needs flexibility, not the balancing area on the other side of the order. A forecast counts as correct when a flagged area gets any request that day, whatever the hour.
 
