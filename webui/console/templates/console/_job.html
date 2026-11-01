@@ -21,7 +21,10 @@
 <div class="grid-2 ops">
   <section class="panel">
     <header class="panel-head"><h2>Job log</h2>
-      {% if selected %}<label class="follow"><input type="checkbox" id="follow" checked> Follow output</label>{% endif %}
+      {% if selected %}<div class="log-tools">
+        <label class="follow"><input type="checkbox" id="follow" checked> Follow output</label>
+        <button type="button" class="btn btn-line" id="copy-log" data-url="/operations/job/{{ selected.id }}/log">Copy log</button>
+      </div>{% endif %}
     </header>
     {% if selected %}
       <pre class="console" id="log">Loading…</pre>
@@ -29,21 +32,41 @@
       <p class="muted pad">No jobs run yet.</p>
     {% endif %}
   </section>
-  <div class="stack">
-    <section class="panel">
-      <header class="panel-head"><h2>Recent jobs</h2></header>
-      {% if recent %}<table class="table compact"><tbody>
-        {% for j in recent %}<tr><td><a href="?job={{ j.id }}">{{ j.title }}</a></td><td class="mono muted">{{ j.started|slice:"5:10" }} {{ j.started|slice:"11:16" }}</td>
-          <td><span class="status status-{{ j.status }}">{{ j.status }}</span></td></tr>{% endfor %}
-      </tbody></table>{% else %}<p class="muted pad">None yet.</p>{% endif %}
-    </section>
-    <section class="panel">
-      <header class="panel-head"><h2>Data files</h2></header>
-      <table class="table compact"><tbody>
-        {% for f in files %}<tr><td>{{ f.label }}<small class="block muted mono">{{ f.path }}</small></td>
-          <td class="mono muted">{% if f.exists %}{{ f.changed|date:"j M H:i" }}{% else %}missing{% endif %}</td>
-          <td class="mono num">{% if f.exists %}{{ f.size|filesizeformat }}{% endif %}</td></tr>{% endfor %}
-      </tbody></table>
-    </section>
-  </div>
+  <section class="panel">
+    <header class="panel-head"><h2>Recent jobs</h2></header>
+    {% if recent %}<table class="table compact"><tbody>
+      {% for j in recent %}<tr><td><a href="?job={{ j.id }}">{{ j.title }}</a></td><td class="mono muted">{{ j.started|slice:"5:10" }} {{ j.started|slice:"11:16" }}</td>
+        <td><span class="status status-{{ j.status }}">{{ j.status }}</span></td></tr>{% endfor %}
+    </tbody></table>{% else %}<p class="muted pad">None yet.</p>{% endif %}
+  </section>
 </div>
+
+<section class="panel files-panel">
+  <header class="panel-head"><h2>Files</h2>
+    <div class="files-tools">
+      <span class="muted">{{ files_found }} of {{ files_total }} available</span>
+      <form method="post" action="/operations/clear/data"
+            onsubmit="return confirm('Clear data?\n\nDeletes the downloaded data, the forecasts, the validation history and the job history.\nThe model and the reference files are kept.')">
+        {% csrf_token %}<button class="btn btn-line" {% if running %}disabled{% endif %}>Clear data</button></form>
+      <form method="post" action="/operations/clear/reset"
+            onsubmit="return confirm('Reset the app?\n\nDeletes the downloaded data, the forecasts, the validation history, the job history AND the trained model.\nOnly the reference files are kept. Retraining takes well over half an hour.')">
+        {% csrf_token %}<button class="btn btn-line btn-danger" {% if running %}disabled{% endif %}>Reset app</button></form>
+    </div>
+  </header>
+  <div class="file-groups">
+    {% for g in files %}<div class="file-group">
+      <h3>{{ g.name }}</h3>
+      <ul>{% for f in g.files %}
+        <li class="file {% if f.exists %}file-ok{% else %}file-missing{% endif %}">
+          <span class="file-icon" aria-hidden="true">{% if f.exists %}<svg width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="9"/><path d="M5.8 10.3l2.8 2.8 5.6-5.8"/></svg>{% else %}<svg width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="9"/><path d="M6.8 6.8l6.4 6.4M13.2 6.8l-6.4 6.4"/></svg>{% endif %}</span>
+          <span class="file-name"><b>{{ f.label }}</b><small class="mono" title="{{ f.path }}">{{ f.path }}</small></span>
+          <span class="file-meta">{% if f.exists %}
+            <span class="file-state">Available</span><span>Updated {{ f.changed|date:"j M Y, H:i" }}</span><span class="mono">{{ f.size|filesizeformat }}</span>
+          {% else %}
+            <span class="file-state">Missing</span><span>Run {{ f.maker }}</span>
+          {% endif %}</span>
+        </li>{% endfor %}
+      </ul>
+    </div>{% endfor %}
+  </div>
+</section>

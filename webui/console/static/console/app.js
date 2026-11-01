@@ -36,6 +36,34 @@
     if (target && !target.contains(event.relatedTarget)) tip.hidden = true;
   });
 
+  // copy the job's whole log, not only the part shown
+  const copy = document.getElementById("copy-log");
+  if (copy) {
+    copy.addEventListener("click", async () => {
+      const label = copy.textContent;
+      try {
+        const text = await (await fetch(copy.dataset.url, { cache: "no-store" })).text();
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(text);
+        } else {
+          // opened by IP address over http: the clipboard API is off, so copy through a hidden text box
+          const box = document.createElement("textarea");
+          box.value = text;
+          box.style.position = "fixed";
+          box.style.opacity = "0";
+          document.body.appendChild(box);
+          box.select();
+          document.execCommand("copy");
+          box.remove();
+        }
+        copy.textContent = "Copied";
+      } catch (error) {
+        copy.textContent = "Copy failed";
+      }
+      setTimeout(() => (copy.textContent = label), 1800);
+    });
+  }
+
   const panel = document.getElementById("process");
   if (!panel) return;
   const log = document.getElementById("log");

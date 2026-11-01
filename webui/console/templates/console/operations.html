@@ -9,6 +9,7 @@
 
 {% block content %}
 {% if error %}<div class="alert-bar">{{ error }}</div>{% endif %}
+{% if done %}<div class="alert-bar done-bar">{{ done }}</div>{% endif %}
 {% if running %}
   {% include "console/_job.html" %}
   {% include "console/_steps.html" %}

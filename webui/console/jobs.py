@@ -223,6 +223,26 @@ def _run(meta: dict, lines: list[list[str]]) -> None:
         _running.pop(meta["id"], None)
 
 
+def clear(with_model: bool) -> int:
+    """Delete the downloaded data, the outputs and the job history, and the model too if asked; returns the files deleted.
+
+    Reference files (GeoNames, the CSC report, reference/) and the config are never touched.
+    """
+    from . import data
+
+    groups = ["Data", "Outputs"] + (["Model"] if with_model else [])
+    files = [data.file_path(key) for group, names in data.FILE_GROUPS if group in groups for key, _, _ in names]
+    if settings.RUNS_DIR.exists():
+        files += list(settings.RUNS_DIR.glob("*.json")) + list(settings.RUNS_DIR.glob("*.log"))
+    with _lock:
+        if _running:
+            raise RuntimeError("A job is running; wait for it to finish first")
+        found = [file for file in files if file.exists()]
+        for file in found:
+            file.unlink()
+    return len(found)
+
+
 def history(limit: int = 15) -> list[dict]:
     """Recent jobs, newest first; jobs cut off by a restart are shown as stopped."""
     if not settings.RUNS_DIR.exists():
@@ -236,14 +256,15 @@ def history(limit: int = 15) -> list[dict]:
     return out
 
 
-def log_tail(job_id: str, lines: int = 400) -> str:
-    """The end of a job's log, with any API token hidden."""
+def log_tail(job_id: str, lines: int | None = 400) -> str:
+    """The end of a job's log, or all of it when lines is None, with any API token hidden."""
     if not re.fullmatch(r"[\w-]+", job_id):
         return ""
     file = settings.RUNS_DIR / f"{job_id}.log"
     if not file.exists():
         return ""
-    text = file.read_text(encoding="utf-8", errors="replace").splitlines()[-lines:]
+    text = file.read_text(encoding="utf-8", errors="replace").splitlines()
+    text = text[-lines:] if lines else text
     return SECRET.sub(r"\1***", "\n".join(text))
 
 

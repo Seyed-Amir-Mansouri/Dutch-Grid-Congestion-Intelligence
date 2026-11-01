@@ -233,21 +233,37 @@ def feature_groups(columns: list[str]) -> list[tuple[str, list[str]]]:
     return list(out.items())
 
 
+FILE_GROUPS = [
+    ("Data", [("gopacs", "GOPACS requests", "Update GOPACS"), ("notices", "Restriction notices", "Update GOPACS"),
+              ("weather", "Weather forecasts", "Update weather"), ("sdac", "Day-ahead market", "Update market data"),
+              ("forecasts", "System forecasts", "Update market data"), ("locations", "Area locations", "Locate areas")]),
+    ("Model", [("model", "Trained model", "Retrain model"), ("walk_forward", "Past scores for the inspector", "Retrain model")]),
+    ("Outputs", [("predictions", "Quarter-hour forecasts", "Issue forecast"),
+                 ("area_predictions", "Area forecasts ledger", "Issue forecast"), ("validation", "Validation history", "Validate")]),
+]
+
+
+def file_path(key: str) -> Path:
+    """The path of a listed file, including the two model files that are not in the config."""
+    special = {"model": model_dir() / estimator.MODEL_FILE, "walk_forward": model_dir() / inspector.WALK_FORWARD_FILE}
+    return special.get(key) or path(key)
+
+
 def file_status() -> list[dict]:
-    """Each input and output file with its size and last change."""
-    names = [("gopacs", "GOPACS requests"), ("notices", "Restriction notices"), ("weather", "Weather forecasts"),
-             ("sdac", "Day-ahead market"), ("forecasts", "System forecasts"), ("locations", "Area locations"),
-             ("area_predictions", "Area forecasts ledger"), ("validation", "Validation history")]
-    out = []
-    for key, label in names:
-        file = path(key)
-        exists = file.exists()
-        out.append({
-            "label": label, "path": str(file.relative_to(CONFIG.root)) if file.is_relative_to(CONFIG.root) else str(file),
-            "exists": exists, "size": file.stat().st_size if exists else 0,
-            "changed": pd.Timestamp(file.stat().st_mtime, unit="s", tz="UTC").tz_convert("Europe/Amsterdam") if exists else None,
-        })
-    return out
+    """Each data, model and output file by group, with whether it exists, its last change and the step that makes it."""
+    groups = []
+    for group, names in FILE_GROUPS:
+        files = []
+        for key, label, maker in names:
+            file = file_path(key)
+            exists = file.exists()
+            files.append({
+                "label": label, "maker": maker, "exists": exists, "size": file.stat().st_size if exists else 0,
+                "path": file.relative_to(CONFIG.root).as_posix() if file.is_relative_to(CONFIG.root) else str(file),
+                "changed": pd.Timestamp(file.stat().st_mtime, unit="s", tz="UTC").tz_convert("Europe/Amsterdam") if exists else None,
+            })
+        groups.append({"name": group, "files": files})
+    return groups
 
 
 def market_start(day) -> str:

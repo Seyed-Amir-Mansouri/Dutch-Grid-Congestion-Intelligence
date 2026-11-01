@@ -4,7 +4,7 @@ from pathlib import Path
 from urllib.parse import urlencode
 
 import pandas as pd
-from django.http import Http404, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_POST
 
@@ -88,13 +88,18 @@ def operations(request):
     context = _common(request, "operations")
     selected = request.GET.get("job")
     recent = jobs.history()
+    files = data.file_status()
+    listed = [f for g in files for f in g["files"]]
     context.update(
         steps=jobs.steps(),
         entsoe_key=jobs.entsoe_key_set(),
         recent=recent,
         selected=jobs.status(selected) if selected else (recent[0] if recent else None),
-        files=data.file_status(),
+        files=files,
+        files_found=sum(f["exists"] for f in listed),
+        files_total=len(listed),
         error=request.GET.get("error"),
+        done=request.GET.get("done"),
     )
     return render(request, "console/operations.html", context)
 
@@ -116,6 +121,19 @@ def run(request, key: str):
     return redirect(f"/operations?job={meta['id']}")
 
 
+@require_POST
+def clear(request, kind: str):
+    """Delete the data and outputs, or with kind "reset" the model as well."""
+    if kind not in ("data", "reset"):
+        raise Http404
+    try:
+        count = jobs.clear(with_model=kind == "reset")
+    except RuntimeError as error:
+        return redirect("/operations?" + urlencode({"error": str(error)}))
+    what = "Data, outputs, job history and model" if kind == "reset" else "Data, outputs and job history"
+    return redirect("/operations?" + urlencode({"done": f"{what} cleared: {count} files deleted"}))
+
+
 def job(request, job_id: str):
     """A job's state and the end of its log, for live updates."""
     meta = jobs.status(job_id)
@@ -124,6 +142,13 @@ def job(request, job_id: str):
     return JsonResponse({"status": meta["status"], "step": meta.get("step"), "steps": len(meta["commands"]),
                          "ended": meta["ended"], "elapsed": jobs.seconds(meta["started"], meta["ended"]),
                          "stages": jobs.stages(meta), "log": jobs.log_tail(job_id)})
+
+
+def job_log(request, job_id: str):
+    """A job's whole log as plain text, for copying."""
+    if jobs.status(job_id) is None:
+        raise Http404
+    return HttpResponse(jobs.log_tail(job_id, lines=None), content_type="text/plain; charset=utf-8")
 
 
 def activity(request):
