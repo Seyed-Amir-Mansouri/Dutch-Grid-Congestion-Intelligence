@@ -53,6 +53,8 @@ code, .mono { font-family: var(--mono); font-size: 12.5px; }
 .pill-warn { border-color: var(--amber); color: #f3c47e; }
 .pill-run { color: #fff; border-color: var(--red); }
 .pill-run:hover { text-decoration: none; }
+.pill-model { color: #dbe0ea; }
+.pill-model:hover { text-decoration: none; border-color: rgba(255,255,255,.5); color: #fff; }
 .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--red); animation: pulse 1.4s infinite; }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
 
