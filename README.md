@@ -71,12 +71,13 @@ python -m pytest
 
 The ENTSO-E fetch needs a free Web API token from `transparency.entsoe.eu`, set as the environment variable `ENTSOE_API_KEY`. It is never written to config or data files.
 
-The location step needs two GeoNames files (CC BY 4.0) in `data/raw/geonames/`:
+The location step reads three reference files, which are included in the repository:
 
-- `places.zip` from `https://download.geonames.org/export/dump/NL.zip`
-- `postcodes.zip` from `https://download.geonames.org/export/zip/NL.zip`
+- `data/raw/geonames/places.zip`, from `https://download.geonames.org/export/dump/NL.zip`
+- `data/raw/geonames/postcodes.zip`, from `https://download.geonames.org/export/zip/NL.zip`
+- `data/raw/CSC_public_report_2026-10-01-0925.xlsx`, the CSC call-off report, to resolve Enexis station codes
 
-It also reads the CSC call-off report (`CSC_public_report_*.xlsx`) to resolve Enexis station codes.
+The GeoNames files are © GeoNames (geonames.org), licensed under CC BY 4.0.
 
 ## Inputs
 
