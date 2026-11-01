@@ -25,7 +25,7 @@ set "PYTHONDONTWRITEBYTECODE=1"
 if errorlevel 1 "%VENV_PY%" manage.py check
 if errorlevel 1 goto :fail
 curl -s -o nul http://localhost:9110/
-if errorlevel 1 start "Congestion Intelligence" "%VENV_PY%" manage.py runserver 127.0.0.1:9110 --noreload --insecure
+if errorlevel 1 start "Congestion Intelligence" "%VENV_PY%" manage.py runserver 0.0.0.0:9110 --noreload --insecure
 set "TRIES=0"
 :wait
 curl -s -o nul http://localhost:9110/

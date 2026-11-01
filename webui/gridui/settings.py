@@ -1,4 +1,5 @@
 import secrets
+import socket
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -8,7 +9,18 @@ RUNS_DIR = BASE_DIR / "runs"
 # a local tool without sessions or logins: a fresh key per start is enough
 SECRET_KEY = secrets.token_urlsafe(50)
 DEBUG = False
-ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
+
+
+def _own_hosts() -> list[str]:
+    """This machine's name and network addresses, so other devices on its networks can open the app."""
+    try:
+        name, aliases, addresses = socket.gethostbyname_ex(socket.gethostname())
+    except OSError:
+        return []
+    return [name, *aliases, *addresses]
+
+
+ALLOWED_HOSTS = ["localhost", "127.0.0.1", *_own_hosts()]
 
 INSTALLED_APPS = [
     "django.contrib.staticfiles",
