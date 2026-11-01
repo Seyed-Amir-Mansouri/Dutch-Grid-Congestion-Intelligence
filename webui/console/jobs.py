@@ -48,6 +48,9 @@ NEEDS = {
 SECRET = re.compile(r"(securityToken=)[^&\s\"']+", re.IGNORECASE)
 _lock = threading.Lock()
 _running: dict = {}
+# the command process of each running job, and the jobs asked to stop
+_process: dict = {}
+_stopping: set = set()
 
 
 def _today():
@@ -203,13 +206,25 @@ def _run(meta: dict, lines: list[list[str]]) -> None:
                 _write(meta)
                 out.write(f"$ congestion-nl {' '.join(line)}\n")
                 out.flush()
-                code = subprocess.call([PYTHON, "-m", "congestion_nl", *line], cwd=settings.PROJECT_ROOT,
-                                       stdout=out, stderr=subprocess.STDOUT, env=env,
-                                       creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-                meta["timing"][-1].update(ended=_now(), code=code)
+                with _lock:
+                    # asked to stop between two commands: do not start the next one
+                    if meta["id"] in _stopping:
+                        meta["timing"][-1].update(ended=_now(), stopped=True)
+                        status = "stopped"
+                        break
+                    process = subprocess.Popen([PYTHON, "-m", "congestion_nl", *line], cwd=settings.PROJECT_ROOT,
+                                               stdout=out, stderr=subprocess.STDOUT, env=env,
+                                               creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+                    _process[meta["id"]] = process
+                code = process.wait()
+                stopped = meta["id"] in _stopping
+                meta["timing"][-1].update(ended=_now(), code=code, stopped=stopped)
                 _write(meta)
-                out.write(f"[exit {code}]\n\n")
+                out.write("[stopped by the user]\n\n" if stopped else f"[exit {code}]\n\n")
                 out.flush()
+                if stopped:
+                    status = "stopped"
+                    break
                 if code != 0:
                     status = "failed"
                     break
@@ -221,6 +236,19 @@ def _run(meta: dict, lines: list[list[str]]) -> None:
     _write(meta)
     with _lock:
         _running.pop(meta["id"], None)
+        _process.pop(meta["id"], None)
+        _stopping.discard(meta["id"])
+
+
+def stop(job_id: str) -> None:
+    """Stop a running job: end the command that is running now and skip the rest."""
+    with _lock:
+        if job_id not in _running:
+            raise RuntimeError("This job is not running")
+        _stopping.add(job_id)
+        process = _process.get(job_id)
+        if process and process.poll() is None:
+            process.terminate()
 
 
 def clear(with_model: bool) -> int:
@@ -298,7 +326,9 @@ def stages(meta: dict) -> list[dict]:
         label, detail = STAGES.get(name, (name, ""))
         record = timing[i] if i < len(timing) else None
         ended_early = meta["status"] in ("failed", "stopped")
-        if record and record.get("code") is not None:
+        if record and record.get("stopped"):
+            state = "stopped"
+        elif record and record.get("code") is not None:
             state = "done" if record["code"] == 0 else "failed"
         elif record:
             state = meta["status"]

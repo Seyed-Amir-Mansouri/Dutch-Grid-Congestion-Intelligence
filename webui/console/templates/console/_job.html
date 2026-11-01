@@ -11,6 +11,9 @@
       <div><span class="ps-label">Elapsed</span><span class="ps-value mono" id="ps-elapsed">–</span></div>
       <div><span class="ps-label">Remaining</span><span class="ps-value mono" id="ps-left">–</span></div>
       <span class="status status-{{ selected.status }}" id="job-status">{{ selected.status }}</span>
+      {% if selected.status == 'running' %}<form method="post" action="/operations/job/{{ selected.id }}/stop" id="stop-job"
+            onsubmit="return confirm('Stop this job?\n\nThe step running now is ended and the steps after it are skipped. A step that is writing its file at this moment can leave that file incomplete.')">
+        {% csrf_token %}<button class="btn btn-stop">Stop</button></form>{% endif %}
     </div>
   </header>
   <div class="process-overall"><span id="ps-bar"></span></div>

@@ -8,6 +8,7 @@ urlpatterns = [
     path("operations/run/<str:key>", views.run, name="run"),
     path("operations/job/<str:job_id>", views.job, name="job"),
     path("operations/job/<str:job_id>/log", views.job_log, name="job_log"),
+    path("operations/job/<str:job_id>/stop", views.stop, name="stop"),
     path("operations/clear/<str:kind>", views.clear, name="clear"),
     path("activity", views.activity, name="activity"),
     path("performance", views.performance, name="performance"),

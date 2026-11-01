@@ -384,3 +384,6 @@ input[type=date]:focus, select:focus, .btn:focus-visible { outline: 2px solid va
 .btn-line.btn-danger:hover:not(:disabled) { background: var(--red); border-color: var(--red); color: #fff; }
 .done-bar { background: #e9f5ee; border-left-color: #2f8a4e; color: #1d5c33; }
 .log-tools { display: flex; align-items: center; gap: 14px; }
+.process-summary form { margin: 0; }
+.btn-stop { height: 30px; padding: 0 14px; background: #fff; color: var(--red); border-color: var(--red); font-size: 12px; }
+.btn-stop:hover { background: var(--red); color: #fff; }

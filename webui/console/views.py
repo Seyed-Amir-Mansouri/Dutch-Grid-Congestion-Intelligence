@@ -134,6 +134,16 @@ def clear(request, kind: str):
     return redirect("/operations?" + urlencode({"done": f"{what} cleared: {count} files deleted"}))
 
 
+@require_POST
+def stop(request, job_id: str):
+    """Stop the running job and show it."""
+    try:
+        jobs.stop(job_id)
+    except RuntimeError as error:
+        return redirect("/operations?" + urlencode({"job": job_id, "error": str(error)}))
+    return redirect("/operations?" + urlencode({"job": job_id}))
+
+
 def job(request, job_id: str):
     """A job's state and the end of its log, for live updates."""
     meta = jobs.status(job_id)
