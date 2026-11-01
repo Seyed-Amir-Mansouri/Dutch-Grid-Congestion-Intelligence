@@ -71,5 +71,5 @@
 {% block scripts %}{% if days %}
 {{ map_points|json_script:"map-points" }}
 <script src="{% static 'console/vendor/leaflet/leaflet.js' %}"></script>
-<script src="{% static 'console/map.js' %}"></script>
+<script src="{% static 'console/map.js' %}?v={{ assets }}"></script>
 {% endif %}{% endblock %}

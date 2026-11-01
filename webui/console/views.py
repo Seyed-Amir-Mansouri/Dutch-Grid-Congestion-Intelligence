@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from urllib.parse import urlencode
 
 import pandas as pd
@@ -8,6 +9,8 @@ from django.shortcuts import redirect, render
 from django.views.decorators.http import require_POST
 
 from . import charts, data, jobs
+
+ASSETS = Path(__file__).parent / "static" / "console"
 
 
 def _common(request, page: str) -> dict:
@@ -20,6 +23,8 @@ def _common(request, page: str) -> dict:
         "model_built": pd.Timestamp(bundle["trained_at"]).tz_convert("Europe/Amsterdam") if bundle else None,
         "threshold": bundle["day_threshold"] if bundle else None,
         "running": jobs.busy(),
+        # changes whenever a stylesheet or script changes, so browsers never keep an old copy
+        "assets": int(max(f.stat().st_mtime for f in ASSETS.glob("*.*"))),
     }
 
 
