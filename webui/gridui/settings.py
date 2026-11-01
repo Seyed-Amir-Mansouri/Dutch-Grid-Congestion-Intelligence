@@ -8,7 +8,7 @@ RUNS_DIR = BASE_DIR / "runs"
 # a local tool without sessions or logins: a fresh key per start is enough
 SECRET_KEY = secrets.token_urlsafe(50)
 DEBUG = False
-ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
+ALLOWED_HOSTS = ["localhost", "127.0.0.1", "100.121.87.117"]
 
 INSTALLED_APPS = [
     "django.contrib.staticfiles",

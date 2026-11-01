@@ -50,7 +50,7 @@
       {% for r in flagged %}
         <tr class="row-{{ r.status }} row-pick" data-point="{{ r.id }}" tabindex="0">
           <td class="icon-cell" title="{% if r.status == 'alert' %}Flag kept{% else %}Vetoed{% endif %}">{{ r.icon }}</td>
-          <td class="area"><span>{{ r.area }}</span><small>{{ r.cell|default:"not located" }}</small></td>
+          <td class="area"><span title="{{ r.area }}">{{ r.area }}</span><small>{{ r.cell|default:"not located" }}</small></td>
           <td class="meter-cell">{{ r.peak_meter }}</td>
           <td class="meter-cell">{{ r.inspector_meter }}</td>
           <td class="mono">{{ r.window_start }}–{{ r.window_end }}</td>

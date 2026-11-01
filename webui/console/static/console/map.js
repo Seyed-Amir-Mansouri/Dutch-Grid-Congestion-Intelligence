@@ -12,22 +12,14 @@
   };
   const NL = L.latLngBounds([50.72, 3.3], [53.58, 7.25]);
 
-  const map = L.map(holder, { zoomControl: true, attributionControl: true, minZoom: 6, maxZoom: 13, zoomSnap: 0.25,
-                              maxBounds: NL.pad(0.6), worldCopyJump: false });
-  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 19,
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  const map = L.map(holder, { zoomControl: true, attributionControl: true, minZoom: 7, maxZoom: 16, zoomSnap: 0.25,
+                              maxBounds: NL.pad(0.35), maxBoundsViscosity: 0.8 });
+  map.fitBounds(NL);
+  // PDOK's grey BRT background map: the Dutch government's open base map, no key, from any address
+  L.tileLayer("https://service.pdok.nl/brt/achtergrondkaart/wmts/v2_0/grijs/EPSG:3857/{z}/{x}/{y}.png", {
+    maxZoom: 16, detectRetina: true, className: "tiles-grey",
+    attribution: 'Kaart &copy; <a href="https://www.kadaster.nl">Kadaster</a> / <a href="https://www.pdok.nl">PDOK</a>',
   }).addTo(map);
-
-  // the 0.25 degree weather cells that hold areas, as a faint grid
-  const cells = new Set(points.map((p) => p.cell).filter(Boolean));
-  cells.forEach((cell) => {
-    const match = /([\d.]+)N ([\d.]+)E/.exec(cell);
-    if (!match) return;
-    const lat = parseFloat(match[1]);
-    const lon = parseFloat(match[2]);
-    L.rectangle([[lat, lon], [lat + 0.25, lon + 0.25]], { className: "map-cell", interactive: false }).addTo(map);
-  });
 
   const pct = (v) => (v == null ? "–" : Math.round(v * 100) + "%");
   const markers = new Map();
@@ -61,10 +53,13 @@
     return div.innerHTML;
   }
 
+  // zoom to the kept alerts, else to any flag, else show the whole country
   function fitAll() {
-    const lit = points.filter((p) => p.status !== "clear");
-    const shown = (lit.length >= 2 ? lit : points).map((p) => [p.lat, p.lon]);
-    if (shown.length) map.fitBounds(L.latLngBounds(shown).pad(0.25), { maxZoom: 9 });
+    const alerts = points.filter((p) => p.status === "alert");
+    const flagged = points.filter((p) => p.status !== "clear");
+    const focus = (alerts.length ? alerts : flagged).map((p) => [p.lat, p.lon]);
+    if (focus.length === 1) map.flyTo(focus[0], 10, { duration: 0.8 });
+    else if (focus.length) map.flyToBounds(L.latLngBounds(focus).pad(0.3), { maxZoom: 10, duration: 0.8 });
     else map.fitBounds(NL);
   }
 
