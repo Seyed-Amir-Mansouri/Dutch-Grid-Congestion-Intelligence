@@ -266,8 +266,26 @@ def file_status() -> list[dict]:
     return groups
 
 
+def has_history(name: str, column: str, back_days: int) -> bool:
+    """Whether a saved file reaches back to the start of the history, so a short fetch is enough."""
+    file = path(name)
+    if not file.exists():
+        return False
+    first = _cached(f"first_{name}", [file], lambda: pd.to_datetime(pd.read_csv(file, usecols=[column])[column]).min())
+    return pd.notna(first) and first <= CONFIG.grid.start_date - pd.Timedelta(days=back_days)
+
+
+def weather_start(day, days_back: int) -> str:
+    """Where a weather fetch starts: some days before the day, or the start of the history when the file does not reach it."""
+    # a week before the history, for the inputs that compare a day with the three before it
+    if has_history("weather", "time", 7):
+        return (pd.Timestamp(day) - pd.Timedelta(days=days_back)).strftime("%Y-%m-%d")
+    return (CONFIG.grid.start_date - pd.Timedelta(days=7)).strftime("%Y-%m-%d")
+
+
 def market_start(day) -> str:
-    """Where a market fetch starts: a week before the day, or the start of the history when there is no file yet."""
-    if path("sdac").exists():
+    """Where a market fetch starts: a week before the day, or the start of the history when the file does not reach it."""
+    # a month before the history, for the price history input
+    if has_history("sdac", "delivery_date", 31):
         return (pd.Timestamp(day) - pd.Timedelta(days=7)).strftime("%Y-%m-%d")
     return (CONFIG.grid.start_date - pd.Timedelta(days=31)).strftime("%Y-%m-%d")

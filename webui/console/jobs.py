@@ -74,7 +74,7 @@ def steps() -> list[dict]:
          "text": "Download congestion requests and transport-restriction notices from GOPACS.", "fields": []},
         {"key": "weather", "title": "Update weather", "kind": "data",
          "text": "Fetch Open-Meteo forecasts for every grid cell and merge them into the weather file.",
-         "fields": [{"name": "start", "label": "From", "type": "date", "value": today - timedelta(days=2)},
+         "fields": [{"name": "start", "label": "From", "type": "date", "value": data.weather_start(today, 2)},
                     {"name": "end", "label": "To", "type": "date", "value": tomorrow}]},
         {"key": "entsoe", "title": "Update market data", "kind": "data", "needs_key": True,
          "text": "Fetch day-ahead prices, net position and system forecasts from ENTSO-E and merge them into the "
@@ -149,7 +149,7 @@ def commands(key: str, form: dict) -> list[list[str]]:
 
         target = datetime.strptime(form["date"], "%Y-%m-%d").date()
         chain = [["fetch-gopacs"],
-                 ["fetch-weather", "--start", str(target - timedelta(days=3)), "--end", str(target)]]
+                 ["fetch-weather", "--start", data.weather_start(target, 3), "--end", str(target)]]
         if entsoe_key_set():
             chain.append(["fetch-entsoe", "--start", data.market_start(target), "--end", str(target + timedelta(days=1))])
         return chain + [["predict", "--date", str(target)]]
