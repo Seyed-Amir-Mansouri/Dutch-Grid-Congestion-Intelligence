@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import http.client
 import json
 import math
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -22,6 +24,8 @@ VARIABLES = {
 }
 # Open-Meteo counts one call per location and 14 days; this keeps a full download under 5000 calls an hour
 SECONDS_PER_CALL = 0.8
+# pauses before each new try when a reply is cut off, empty or refused for now; the last try's error is raised
+RETRY_WAITS = (10, 30, 60)
 
 
 def cell_centre(cell: str, size: float) -> tuple[float, float]:
@@ -30,10 +34,23 @@ def cell_centre(cell: str, size: float) -> tuple[float, float]:
     return float(lat[:-1]) + size / 2, float(lon[:-1]) + size / 2
 
 
-def _get_json(params: dict) -> dict:
-    """Fetch one Open-Meteo response."""
-    with urllib.request.urlopen(f"{URL}?{urllib.parse.urlencode(params)}", timeout=120) as response:
-        return json.load(response)
+def _get_json(params: dict, sleep=time.sleep) -> dict:
+    """Fetch one Open-Meteo response, trying again after a pause when the reply is cut off or empty."""
+    for wait in (*RETRY_WAITS, None):
+        try:
+            with urllib.request.urlopen(f"{URL}?{urllib.parse.urlencode(params)}", timeout=120) as response:
+                return json.load(response)
+        except urllib.error.HTTPError as error:
+            # a bad request fails the same way every time; only "too many requests" and server errors are tried again
+            if wait is None or (error.code != 429 and error.code < 500):
+                raise
+            problem = f"HTTP {error.code}"
+        except (urllib.error.URLError, http.client.HTTPException, json.JSONDecodeError, TimeoutError) as error:
+            if wait is None:
+                raise
+            problem = type(error).__name__
+        print(f"Open-Meteo: {problem} at {params['latitude']}, {params['longitude']}; trying again in {wait} s", flush=True)
+        sleep(wait)
 
 
 def fetch_cell(cell: str, start: pd.Timestamp, end: pd.Timestamp, size: float, get_json=_get_json) -> pd.DataFrame:
