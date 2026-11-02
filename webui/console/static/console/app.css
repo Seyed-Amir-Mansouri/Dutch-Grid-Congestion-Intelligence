@@ -382,6 +382,24 @@ input[type=date]:focus, select:focus, .btn:focus-visible { outline: 2px solid va
 .btn-line:hover:not(:disabled) { border-color: var(--navy); color: var(--navy); }
 .btn-line.btn-danger { color: var(--red); border-color: #f0c4c1; }
 .btn-line.btn-danger:hover:not(:disabled) { background: var(--red); border-color: var(--red); color: #fff; }
+.btn-drive { height: 30px; padding: 0 12px; background: var(--navy); color: #fff; font-size: 12px; gap: 6px; }
+.btn-drive:hover:not(:disabled) { background: var(--navy-ink); }
+.btn-drive svg { fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+/* a file being replaced from Drive: a filling bar along the row's foot, the waiting ones dimmed, the new ones flashing green */
+.file { position: relative; overflow: hidden; }
+.file-load { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; display: none; background: #e6e9ef; }
+.file-load span { display: block; height: 100%; width: 0; transition: width 1s linear;
+  background: repeating-linear-gradient(-45deg, var(--navy) 0 8px, #4b5a86 8px 16px); background-size: 22px 22px; animation: stripes .8s linear infinite; }
+.file-loading { border-left-color: var(--navy); background: #f2f4f9; }
+.file-loading .file-load { display: block; }
+.file-loading .file-icon svg { animation: spin 1.4s linear infinite; }
+.file-loading .file-icon circle { fill: var(--navy); }
+.file-starting .file-load span { width: 35% !important; animation: stripes .8s linear infinite, sweep 1.6s ease-in-out infinite alternate; }
+.file-queued { opacity: .5; }
+.file-fresh { animation: fresh 1.6s ease-out; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes fresh { 0% { background: #c9ecd5; } 100% { background: #fff; } }
+@media (prefers-reduced-motion: reduce) { .file-load span, .file-loading .file-icon svg, .file-fresh { animation: none; } }
 .done-bar { background: #e9f5ee; border-left-color: #2f8a4e; color: #1d5c33; }
 .log-tools { display: flex; align-items: center; gap: 14px; }
 .process-summary form { margin: 0; }

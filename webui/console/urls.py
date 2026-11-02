@@ -10,6 +10,7 @@ urlpatterns = [
     path("operations/job/<str:job_id>/log", views.job_log, name="job_log"),
     path("operations/job/<str:job_id>/stop", views.stop, name="stop"),
     path("operations/clear/<str:kind>", views.clear, name="clear"),
+    path("operations/drive", views.drive, name="drive"),
     path("activity", views.activity, name="activity"),
     path("performance", views.performance, name="performance"),
     path("model", views.model, name="model"),

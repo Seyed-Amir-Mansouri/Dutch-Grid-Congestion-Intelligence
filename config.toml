@@ -47,3 +47,14 @@ veto_cut = 0.5
 [validation]
 window_days = 14
 min_skill = 0.0
+
+# Google Drive file IDs (or share links) for Operations > Download from Drive and app.bat's first start
+[drive]
+gopacs = "19qdXW2odRWdzQFxRaJmCrRlseyKm9hmA"
+notices = "1m9cUgbABCZmgCi1EXIGLzQM8AWSDSiOL"
+sdac = "1wn3UowCtPPEDLahsMFDscF4lq0j9rc9b"
+forecasts = "14HJ3JQ4RWkV4fsRZLUb26KMgNZWSoNPO"
+weather = "19SSulH-HYmIzlxh9y0svr0wl6ugxpbmR"
+locations = "1HdQFkIK80KYHsr_XsuHAAuEsZvOyOg7G"
+model = "1bXzXgDiL0p9OWH8XEYpgFaq0_0ChrT94"
+walk_forward = "19nDsPmyqDhK0VpNuh1Iw9bUC7LTWCQTe"

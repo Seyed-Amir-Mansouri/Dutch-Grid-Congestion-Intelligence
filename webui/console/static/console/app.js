@@ -85,6 +85,7 @@
     Train: '<rect x="6" y="6" width="12" height="12" rx="1.5"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/>',
     Forecast: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1" fill="currentColor"/>',
     Validate: '<path d="M4 12.5l5 5L20 6.5"/>',
+    Download: '<path d="M7 17.5h-.5a4.5 4.5 0 0 1-.6-9 6 6 0 0 1 11.6 1.2 3.9 3.9 0 0 1 .5 7.8H17M12 10v10M8.5 16.5 12 20l3.5-3.5"/>',
   };
   let snapshot = null;
   let receivedAt = 0;
@@ -106,7 +107,7 @@
       item.innerHTML =
         `<div class="stage-top"><span class="stage-n">${String(i + 1).padStart(2, "0")}</span><span class="stage-state"></span></div>` +
         `<div class="stage-icon"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.7" ` +
-        `stroke-linecap="round" stroke-linejoin="round">${ICONS[stage.label] || ICONS.Forecast}</svg><span class="ring"></span></div>` +
+        `stroke-linecap="round" stroke-linejoin="round">${ICONS[stage.icon] || ICONS[stage.label] || ICONS.Forecast}</svg><span class="ring"></span></div>` +
         `<h4></h4><p class="stage-detail"></p><div class="stage-bar"><span></span></div><div class="stage-time mono"></div>`;
       item.querySelector("h4").textContent = stage.label;
       item.querySelector(".stage-detail").textContent = stage.detail;
@@ -133,7 +134,19 @@
       const time = item.querySelector(".stage-time");
       if (stage.state === "running") {
         current = { index: i, stage };
-        if (stage.typical) {
+        if (stage.progress != null) {
+          // a download reports how much of the file has arrived
+          fill.style.width = stage.progress + "%";
+          item.classList.remove("stage-unknown");
+          if (stage.typical) remaining += Math.max(stage.typical - seconds, 0);
+          else remainingKnown = false;
+        } else if (stage.icon === "Download") {
+          // still starting up, before the first bytes: a moving bar, not a frozen one
+          fill.style.width = "";
+          item.classList.add("stage-unknown");
+          if (stage.typical) remaining += Math.max(stage.typical - seconds, 0);
+          else remainingKnown = false;
+        } else if (stage.typical) {
           fill.style.width = Math.min(95, (seconds / stage.typical) * 100) + "%";
           item.classList.remove("stage-unknown");
           remaining += Math.max(stage.typical - seconds, 0);
@@ -142,7 +155,9 @@
           item.classList.add("stage-unknown");
           remainingKnown = false;
         }
-        time.textContent = clock(seconds) + (stage.typical ? ` / ~${clock(stage.typical)}` : "");
+        time.textContent = stage.progress != null ? `${stage.progress}% · ${clock(seconds)}`
+          : stage.icon === "Download" ? `Starting… ${clock(seconds)}`
+          : clock(seconds) + (stage.typical ? ` / ~${clock(stage.typical)}` : "");
       } else if (stage.state === "done") {
         fill.style.width = "100%";
         time.textContent = clock(seconds);
@@ -157,6 +172,19 @@
           else remainingKnown = false;
         }
       }
+    });
+    // the Files panel row of each file a Drive download is replacing
+    stages.forEach((stage) => {
+      const parts = stage.command.split(" ");
+      if (parts[1] !== "fetch-drive") return;
+      const row = document.querySelector(`.file[data-key="${parts[2]}"]`);
+      if (!row) return;
+      row.classList.toggle("file-loading", stage.state === "running");
+      row.classList.toggle("file-starting", stage.state === "running" && stage.progress == null);
+      row.classList.toggle("file-queued", stage.state === "pending" && snapshot.status === "running");
+      row.classList.toggle("file-fresh", stage.state === "done" && snapshot.status === "running");
+      const fill = row.querySelector(".file-load span");
+      fill.style.width = stage.state === "running" ? (stage.progress || 0) + "%" : "";
     });
     const done = stages.filter((s) => s.state === "done").length;
     out.bar.style.width = (stages.length ? ((done + (current ? 0.5 : 0)) / stages.length) * 100 : 0) + "%";

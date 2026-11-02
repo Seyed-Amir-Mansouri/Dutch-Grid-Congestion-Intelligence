@@ -98,6 +98,7 @@ def operations(request):
         files=files,
         files_found=sum(f["exists"] for f in listed),
         files_total=len(listed),
+        drive_ready=jobs.drive_ready(),
         error=request.GET.get("error"),
         done=request.GET.get("done"),
     )
@@ -132,6 +133,18 @@ def clear(request, kind: str):
         return redirect("/operations?" + urlencode({"error": str(error)}))
     what = "Data, outputs, job history and model" if kind == "reset" else "Data, outputs and job history"
     return redirect("/operations?" + urlencode({"done": f"{what} cleared: {count} files deleted"}))
+
+
+@require_POST
+def drive(request):
+    """Download the shared data and model files from Google Drive and show the job."""
+    if not jobs.drive_ready():
+        return redirect("/operations?" + urlencode({"error": "Add the Drive links to the [drive] section of config.toml"}))
+    try:
+        meta = jobs.start("drive", "Download from Drive", {})
+    except RuntimeError as error:
+        return redirect("/operations?" + urlencode({"error": str(error)}))
+    return redirect(f"/operations?job={meta['id']}")
 
 
 @require_POST

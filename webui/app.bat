@@ -16,9 +16,11 @@ set "VENV_PY=%CD%\.venv\Scripts\python.exe"
 if not exist "%VENV_PY%" %PY_CMD% -m venv "%CD%\.venv"
 if errorlevel 1 goto :fail
 cd /d "%~dp0"
-"%VENV_PY%" -c "import django, pandas, numpy, sklearn, joblib, openpyxl, entsoe, congestion_nl" >nul 2>&1
+"%VENV_PY%" -c "import django, pandas, numpy, sklearn, joblib, openpyxl, entsoe, congestion_nl; assert sklearn.__version__ == '1.9.1'" >nul 2>&1
 if errorlevel 1 "%VENV_PY%" -m pip install -r requirements.txt
 if errorlevel 1 goto :fail
+"%VENV_PY%" -m congestion_nl fetch-drive --missing
+if errorlevel 1 echo Some shared files could not be downloaded; the app starts without them.
 set "PIPELINE_PYTHON=%VENV_PY%"
 set "PYTHONDONTWRITEBYTECODE=1"
 "%VENV_PY%" manage.py check >nul 2>&1

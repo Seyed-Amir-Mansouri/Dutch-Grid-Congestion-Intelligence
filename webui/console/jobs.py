@@ -22,6 +22,10 @@ STAGES = {
     "predict": ("Forecast", "Score areas, apply the veto"),
     "validate": ("Validate", "Score against GOPACS"),
 }
+# short stage names for the files a Drive download replaces
+DRIVE_STAGES = {"gopacs": "Requests", "notices": "Notices", "sdac": "Market", "forecasts": "Forecasts",
+                "weather": "Weather", "locations": "Locations", "model": "Model", "walk_forward": "Scores"}
+PROGRESS = re.compile(r"progress: (\d+)%")
 # files the steps read: a label and the step that makes the file, or None for reference files
 FILES = {
     "gopacs": ("GOPACS requests", "Update GOPACS"),
@@ -136,6 +140,13 @@ def missing(key: str) -> list[str]:
     return out
 
 
+def drive_ready() -> bool:
+    """Whether config.toml has Drive links to download from."""
+    from . import data
+
+    return bool(data.CONFIG.drive)
+
+
 def commands(key: str, form: dict) -> list[list[str]]:
     """The command lines for a step, from the submitted form."""
     day = lambda name: datetime.strptime(form[name], "%Y-%m-%d").strftime("%Y-%m-%d")
@@ -150,6 +161,10 @@ def commands(key: str, form: dict) -> list[list[str]]:
     }
     if key in single:
         return single[key]()
+    if key == "drive":
+        from . import data
+
+        return [["fetch-drive", name] for name in data.CONFIG.drive]
     if key == "daily":
         from . import data
 
@@ -333,11 +348,27 @@ def typical_seconds() -> dict[str, float]:
     found: dict[str, list[float]] = {}
     if settings.RUNS_DIR.exists():
         for file in sorted(settings.RUNS_DIR.glob("*.json"), reverse=True)[:60]:
-            meta = json.loads(file.read_text(encoding="utf-8"))
+            meta = _load(file)
             for command, timing in zip(meta["commands"], meta.get("timing", [])):
                 if timing.get("code") == 0:
-                    found.setdefault(command.split()[1], []).append(seconds(timing["started"], timing["ended"]))
+                    found.setdefault(_kind(command), []).append(seconds(timing["started"], timing["ended"]))
     return {name: sorted(values)[len(values) // 2] for name, values in found.items()}
+
+
+def _kind(command: str) -> str:
+    """The command name that past times are kept by; Drive downloads by file, since their sizes differ a lot."""
+    parts = command.split()
+    return " ".join(parts[1:3]) if parts[1] == "fetch-drive" else parts[1]
+
+
+def _progress(job_id: str) -> int | None:
+    """The last download percentage the running command printed."""
+    log = settings.RUNS_DIR / f"{job_id}.log"
+    if not log.exists():
+        return None
+    text = log.read_text(encoding="utf-8", errors="replace").rsplit("$ congestion-nl", 1)[-1]
+    found = PROGRESS.findall(text)
+    return int(found[-1]) if found else None
 
 
 def stages(meta: dict) -> list[dict]:
@@ -346,8 +377,14 @@ def stages(meta: dict) -> list[dict]:
     timing = meta.get("timing", [])
     out = []
     for i, command in enumerate(meta["commands"]):
-        name = command.split()[1]
+        name = _kind(command)
         label, detail = STAGES.get(name, (name, ""))
+        icon = label
+        if name.startswith("fetch-drive "):
+            from . import data
+
+            file = name.split()[1]
+            label, detail, icon = DRIVE_STAGES.get(file, file), data.file_path(file).name, "Download"
         record = timing[i] if i < len(timing) else None
         ended_early = meta["status"] in ("failed", "stopped")
         if record and record.get("stopped"):
@@ -364,9 +401,10 @@ def stages(meta: dict) -> list[dict]:
         else:
             state = "skipped" if ended_early else "pending"
         started = record["started"] if record else None
-        out.append({"label": label, "detail": detail, "command": command, "state": state,
+        out.append({"label": label, "detail": detail, "icon": icon, "command": command, "state": state,
                     "seconds": seconds(started, record.get("ended") if record else None) if started else None,
-                    "typical": typical.get(name)})
+                    "typical": typical.get(name),
+                    "progress": _progress(meta["id"]) if state == "running" and icon == "Download" else None})
     return out
 
 

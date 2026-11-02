@@ -102,6 +102,27 @@ def cmd_fetch_gopacs(args: argparse.Namespace) -> None:
     print(f"notices: {notices_path} ({len(notices)} transport-restriction notices)")
 
 
+def cmd_fetch_drive(args: argparse.Namespace) -> None:
+    """Download the shared data and model files from Google Drive, replacing the saved copies."""
+    from . import drive_source
+
+    config = load_config(args.config)
+    if not config.drive:
+        print("No Drive links in the [drive] section of config.toml", file=sys.stderr)
+        sys.exit(1)
+    unknown = sorted(set(args.names) - set(config.drive))
+    if unknown:
+        print(f"No Drive link for: {', '.join(unknown)}", file=sys.stderr)
+        sys.exit(1)
+    for name in args.names or list(config.drive):
+        path = drive_source.target(config, name)
+        if args.missing and path.exists():
+            print(f"{name}: {path} (kept)")
+            continue
+        size = drive_source.download(config.drive[name], path)
+        print(f"{name}: {path} ({size / 2**20:.1f} MB)")
+
+
 def cmd_locate(args: argparse.Namespace) -> None:
     """Place every GOPACS area on the map and assign it a grid cell."""
     from . import ingest, locations
@@ -212,6 +233,11 @@ def build_parser() -> argparse.ArgumentParser:
     fetch_gopacs = sub.add_parser("fetch-gopacs", help="fetch congestion events and notices from GOPACS")
     fetch_gopacs.add_argument("--file", help="read a saved announcements JSON instead of fetching")
     fetch_gopacs.set_defaults(func=cmd_fetch_gopacs)
+
+    fetch_drive = sub.add_parser("fetch-drive", help="download the shared data and model files from Google Drive")
+    fetch_drive.add_argument("names", nargs="*", help="files to download, default all in [drive]")
+    fetch_drive.add_argument("--missing", action="store_true", help="only download files that are not there yet")
+    fetch_drive.set_defaults(func=cmd_fetch_drive)
 
     locate = sub.add_parser("locate", help="place GOPACS areas in grid cells")
     locate.set_defaults(func=cmd_locate)

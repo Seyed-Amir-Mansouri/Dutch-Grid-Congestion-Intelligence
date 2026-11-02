@@ -48,6 +48,11 @@
   <header class="panel-head"><h2>Files</h2>
     <div class="files-tools">
       <span class="muted">{{ files_found }} of {{ files_total }} available</span>
+      <form method="post" action="/operations/drive"
+            onsubmit="return confirm('Download from Drive?\n\nReplaces the data files and the trained model with the latest copies on Google Drive.\nEach file is swapped in only once it has fully arrived. Forecasts and validation history are kept.')">
+        {% csrf_token %}<button class="btn btn-drive" {% if running or not drive_ready %}disabled{% endif %}
+          {% if not drive_ready %}title="Add the Drive links to the [drive] section of config.toml"{% endif %}>
+          <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10.5l5 5 5-5M5 20h14"/></svg>Download from Drive</button></form>
       <form method="post" action="/operations/clear/data"
             onsubmit="return confirm('Clear data?\n\nDeletes the downloaded data, the forecasts, the validation history and the job history.\nThe model and the reference files are kept.')">
         {% csrf_token %}<button class="btn btn-line" {% if running %}disabled{% endif %}>Clear data</button></form>
@@ -60,7 +65,7 @@
     {% for g in files %}<div class="file-group">
       <h3>{{ g.name }}</h3>
       <ul>{% for f in g.files %}
-        <li class="file {% if f.exists %}file-ok{% else %}file-missing{% endif %}">
+        <li class="file {% if f.exists %}file-ok{% else %}file-missing{% endif %}" data-key="{{ f.key }}">
           <span class="file-icon" aria-hidden="true">{% if f.exists %}<svg width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="9"/><path d="M5.8 10.3l2.8 2.8 5.6-5.8"/></svg>{% else %}<svg width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="9"/><path d="M6.8 6.8l6.4 6.4M13.2 6.8l-6.4 6.4"/></svg>{% endif %}</span>
           <span class="file-name"><b>{{ f.label }}</b><small class="mono" title="{{ f.path }}">{{ f.path }}</small></span>
           <span class="file-meta">{% if f.exists %}
@@ -68,6 +73,7 @@
           {% else %}
             <span class="file-state">Missing</span><span>Run {{ f.maker }}</span>
           {% endif %}</span>
+          <span class="file-load" aria-hidden="true"><span></span></span>
         </li>{% endfor %}
       </ul>
     </div>{% endfor %}

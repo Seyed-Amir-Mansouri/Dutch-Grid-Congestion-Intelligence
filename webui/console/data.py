@@ -258,7 +258,7 @@ def file_status() -> list[dict]:
             file = file_path(key)
             exists = file.exists()
             files.append({
-                "label": label, "maker": maker, "exists": exists, "size": file.stat().st_size if exists else 0,
+                "key": key, "label": label, "maker": maker, "exists": exists, "size": file.stat().st_size if exists else 0,
                 "path": file.relative_to(CONFIG.root).as_posix() if file.is_relative_to(CONFIG.root) else str(file),
                 "changed": pd.Timestamp(file.stat().st_mtime, unit="s", tz="UTC").tz_convert("Europe/Amsterdam") if exists else None,
             })

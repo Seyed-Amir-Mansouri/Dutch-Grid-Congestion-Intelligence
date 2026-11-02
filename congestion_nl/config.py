@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import pandas as pd
@@ -73,6 +73,8 @@ class Config:
     model: Settings
     inspector: Inspector
     validation: Validation
+    # Drive share links or IDs of the shared data and model files, by file name
+    drive: dict[str, str] = field(default_factory=dict)
 
     def resolve(self, path: Path) -> Path:
         """Return an absolute path relative to the project root."""
@@ -102,4 +104,5 @@ def load_config(path: str | Path = DEFAULT_CONFIG) -> Config:
             veto_cut=float(raw["inspector"]["veto_cut"]),
         ),
         validation=Validation(**raw["validation"]),
+        drive={name: link for name, link in raw.get("drive", {}).items() if link},
     )
