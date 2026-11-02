@@ -7,6 +7,7 @@ import re
 import subprocess
 import sys
 import threading
+import time
 from datetime import datetime, timedelta
 
 from django.conf import settings
@@ -51,6 +52,8 @@ _running: dict = {}
 # the command process of each running job, and the jobs asked to stop
 _process: dict = {}
 _stopping: set = set()
+# the last saved state of each running job, so the page never reads a file that is being rewritten
+_saved: dict = {}
 
 
 def _today():
@@ -164,8 +167,31 @@ def _meta_path(job_id: str):
 
 
 def _write(meta: dict) -> None:
-    """Save a job's state next to its log."""
-    _meta_path(meta["id"]).write_text(json.dumps(meta, indent=1), encoding="utf-8")
+    """Save a job's state next to its log, swapping in a whole new copy so no reader sees half a file."""
+    text = json.dumps(meta, indent=1)
+    with _lock:
+        _saved[meta["id"]] = text
+    path = _meta_path(meta["id"])
+    part = path.with_suffix(".tmp")
+    part.write_text(text, encoding="utf-8")
+    for _ in range(20):
+        try:
+            os.replace(part, path)
+            return
+        except PermissionError:
+            # Windows refuses while another process, such as Drive sync, has the file open
+            time.sleep(0.1)
+    os.replace(part, path)
+
+
+def _load(file) -> dict:
+    """A job's state: from memory while it runs, otherwise from its file; jobs cut off by a restart count as stopped."""
+    with _lock:
+        text = _saved.get(file.stem) if file.stem in _running else None
+    meta = json.loads(text or file.read_text(encoding="utf-8"))
+    if meta["status"] == "running" and meta["id"] not in _running:
+        meta["status"] = "stopped"
+    return meta
 
 
 def busy() -> dict | None:
@@ -238,6 +264,7 @@ def _run(meta: dict, lines: list[list[str]]) -> None:
         _running.pop(meta["id"], None)
         _process.pop(meta["id"], None)
         _stopping.discard(meta["id"])
+        _saved.pop(meta["id"], None)
 
 
 def stop(job_id: str) -> None:
@@ -261,7 +288,7 @@ def clear(with_model: bool) -> int:
     groups = ["Data", "Outputs"] + (["Model"] if with_model else [])
     files = [data.file_path(key) for group, names in data.FILE_GROUPS if group in groups for key, _, _ in names]
     if settings.RUNS_DIR.exists():
-        files += list(settings.RUNS_DIR.glob("*.json")) + list(settings.RUNS_DIR.glob("*.log"))
+        files += [file for kind in ("*.json", "*.tmp", "*.log") for file in settings.RUNS_DIR.glob(kind)]
     with _lock:
         if _running:
             raise RuntimeError("A job is running; wait for it to finish first")
@@ -277,10 +304,7 @@ def history(limit: int = 15) -> list[dict]:
         return []
     out = []
     for file in sorted(settings.RUNS_DIR.glob("*.json"), reverse=True)[:limit]:
-        meta = json.loads(file.read_text(encoding="utf-8"))
-        if meta["status"] == "running" and meta["id"] not in _running:
-            meta["status"] = "stopped"
-        out.append(meta)
+        out.append(_load(file))
     return out
 
 
@@ -351,7 +375,4 @@ def status(job_id: str) -> dict | None:
     file = _meta_path(job_id) if re.fullmatch(r"[\w-]+", job_id) else None
     if file is None or not file.exists():
         return None
-    meta = json.loads(file.read_text(encoding="utf-8"))
-    if meta["status"] == "running" and meta["id"] not in _running:
-        meta["status"] = "stopped"
-    return meta
+    return _load(file)

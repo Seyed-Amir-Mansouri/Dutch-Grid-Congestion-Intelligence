@@ -174,7 +174,11 @@
   async function refresh() {
     try {
       const response = await fetch("/operations/job/" + panel.dataset.job, { cache: "no-store" });
-      if (!response.ok) return;
+      // a failed poll must not end the live view: try again shortly
+      if (!response.ok) {
+        setTimeout(refresh, 3000);
+        return;
+      }
       snapshot = await response.json();
       receivedAt = Date.now();
       draw();
