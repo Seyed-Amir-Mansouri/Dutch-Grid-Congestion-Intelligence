@@ -11,7 +11,10 @@ from . import estimator, schemas
 from .config import Config
 from .features import NOTICE_FEATURES, WEATHER_DAY
 
-WALK_FORWARD_FILE = "walk_forward.csv"
+# monthly out-of-sample predictor scores the inspector learns from
+HISTORY_FILE = "inspector_history.csv"
+# the 14-day test: each day forecast by a predictor and inspector retrained on what was known two days before
+TEST_FILE = "walk_forward.csv"
 WINDOWS = (7, 30, 90)
 MIN_FLAGS = 50
 # area-day inputs from the predictor's dataset: values that are the same for every quarter of the day
@@ -149,7 +152,7 @@ def judge(config: Config, bundle: dict, dataset: pd.DataFrame, days: pd.DataFram
     flagged = days["day_flag"] == 1
     if veto is None or not flagged.any():
         return days
-    cache = config.resolve(config.paths.model_dir) / WALK_FORWARD_FILE
+    cache = config.resolve(config.paths.model_dir) / HISTORY_FILE
     past = walk_forward(config, dataset, bundle["features"], cache)
     table = inputs(past, dataset, bundle["day_threshold"])
     rows = days.loc[flagged, schemas.AREA_KEY + ["peak_probability"]].rename(columns={"peak_probability": "peak"})

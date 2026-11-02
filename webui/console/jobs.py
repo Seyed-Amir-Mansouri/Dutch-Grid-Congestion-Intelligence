@@ -21,10 +21,12 @@ STAGES = {
     "train": ("Train", "Predictor and inspector"),
     "predict": ("Forecast", "Score areas, apply the veto"),
     "validate": ("Validate", "Score against GOPACS"),
+    "rolling-test": ("Test", "Retrain daily, score each day"),
 }
 # short stage names for the files a Drive download replaces
 DRIVE_STAGES = {"gopacs": "Requests", "notices": "Notices", "sdac": "Market", "forecasts": "Forecasts",
-                "weather": "Weather", "locations": "Locations", "model": "Model", "walk_forward": "Scores"}
+                "weather": "Weather", "locations": "Locations", "model": "Model", "inspector_history": "Inspector",
+                "walk_forward": "Test"}
 PROGRESS = re.compile(r"progress: (\d+)%")
 # files the steps read: a label and the step that makes the file, or None for reference files
 FILES = {
@@ -49,6 +51,7 @@ NEEDS = {
     "train": INPUTS,
     "predict": ["model"] + INPUTS,
     "validate": ["area_predictions"] + INPUTS,
+    "rolling": INPUTS,
 }
 SECRET = re.compile(r"(securityToken=)[^&\s\"']+", re.IGNORECASE)
 _lock = threading.Lock()
@@ -76,6 +79,9 @@ def steps() -> list[dict]:
 
     today = _today()
     tomorrow = today + timedelta(days=1)
+    # the last settled day: requests of later days are not complete yet
+    settled = data.label_end()
+    test_end = settled.date() if settled is not None else today - timedelta(days=2)
     found = [
         {"key": "daily", "title": "Daily forecast run", "kind": "chain", "lead": True,
          "text": "Refresh GOPACS, weather and market data, then issue tomorrow's forecast with the inspector's verdict.",
@@ -101,6 +107,11 @@ def steps() -> list[dict]:
         {"key": "validate", "title": "Validate", "kind": "model",
          "text": "Score settled forecasts against GOPACS requests and append to the validation history.",
          "fields": [{"name": "as_of", "label": "As of", "type": "date", "value": today}]},
+        {"key": "rolling", "title": "Run 14-day test", "kind": "model",
+         "text": "Forecast settled days as if live: retrain the predictor and inspector for each day on what was known "
+                 "two days before, then score against GOPACS. About a minute and a half per day.",
+         "fields": [{"name": "start", "label": "From", "type": "date", "value": test_end - timedelta(days=13)},
+                    {"name": "end", "label": "To", "type": "date", "value": test_end}]},
     ]
     for step in found:
         step["missing"] = missing(step["key"])
@@ -158,6 +169,7 @@ def commands(key: str, form: dict) -> list[list[str]]:
         "train": lambda: [["train"]],
         "predict": lambda: [["predict", "--date", day("date")]],
         "validate": lambda: [["validate", "--as-of", day("as_of")]],
+        "rolling": lambda: [["rolling-test", "--start", day("start"), "--end", day("end")]],
     }
     if key in single:
         return single[key]()
@@ -199,11 +211,17 @@ def _write(meta: dict) -> None:
     os.replace(part, path)
 
 
-def _load(file) -> dict:
-    """A job's state: from memory while it runs, otherwise from its file; jobs cut off by a restart count as stopped."""
+def _load(file) -> dict | None:
+    """A job's state: from memory while it runs, otherwise from its file; None for a file cut off mid-write.
+
+    Jobs cut off by a restart count as stopped.
+    """
     with _lock:
         text = _saved.get(file.stem) if file.stem in _running else None
-    meta = json.loads(text or file.read_text(encoding="utf-8"))
+    try:
+        meta = json.loads(text or file.read_text(encoding="utf-8"))
+    except ValueError:
+        return None
     if meta["status"] == "running" and meta["id"] not in _running:
         meta["status"] = "stopped"
     return meta
@@ -302,6 +320,9 @@ def clear(with_model: bool) -> int:
 
     groups = ["Data", "Outputs"] + (["Model"] if with_model else [])
     files = [data.file_path(key) for group, names in data.FILE_GROUPS if group in groups for key, _, _ in names]
+    if with_model:
+        # not listed in the Files panel, but made by training like the model
+        files.append(data.file_path("inspector_history"))
     if settings.RUNS_DIR.exists():
         files += [file for kind in ("*.json", "*.tmp", "*.log") for file in settings.RUNS_DIR.glob(kind)]
     with _lock:
@@ -319,7 +340,9 @@ def history(limit: int = 15) -> list[dict]:
         return []
     out = []
     for file in sorted(settings.RUNS_DIR.glob("*.json"), reverse=True)[:limit]:
-        out.append(_load(file))
+        meta = _load(file)
+        if meta:
+            out.append(meta)
     return out
 
 
@@ -348,7 +371,7 @@ def typical_seconds() -> dict[str, float]:
     found: dict[str, list[float]] = {}
     if settings.RUNS_DIR.exists():
         for file in sorted(settings.RUNS_DIR.glob("*.json"), reverse=True)[:60]:
-            meta = _load(file)
+            meta = _load(file) or {"commands": []}
             for command, timing in zip(meta["commands"], meta.get("timing", [])):
                 if timing.get("code") == 0:
                     found.setdefault(_kind(command), []).append(seconds(timing["started"], timing["ended"]))

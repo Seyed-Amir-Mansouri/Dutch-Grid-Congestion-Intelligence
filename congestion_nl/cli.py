@@ -160,6 +160,29 @@ def cmd_train(args: argparse.Namespace) -> None:
     print(f"saved: {path}")
 
 
+def cmd_rolling_test(args: argparse.Namespace) -> None:
+    """Forecast a window of settled days as if live, retraining each day, and save the result for the web UI."""
+    from . import inspector
+
+    config = load_config(args.config)
+    inputs = pipeline.load_inputs(config)
+    dataset = pipeline.build(config, inputs, pipeline.label_cutoff(config, inputs.events))
+    result = pipeline.rolling_test(config, dataset, _timestamp(args.start), _timestamp(args.end))
+    path = config.resolve(config.paths.model_dir) / inspector.TEST_FILE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    result.to_csv(path, index=False)
+
+    flagged, shown, hit = result["day_flag"] == 1, result["shown"] == 1, result["had_request"] == 1
+    print(f"{result['delivery_date'].nunique()} days, {int(hit.sum())} area-days with a request")
+    print(f"predictor: {int((flagged & hit).sum())} correct, {int((flagged & ~hit).sum())} wrong")
+    print(f"with the inspector: {int((shown & hit).sum())} correct, {int((shown & ~hit).sum())} wrong")
+    kept = result[shown & hit]
+    if len(kept):
+        print(f"timing on correct shown flags: {int(kept['inside_quarters'].sum())} of {int(kept['request_quarters'].sum())} "
+              f"requested quarter-hours inside the window, windows {kept['window_quarters'].mean() / 4:.1f} h on average")
+    print(f"saved: {path}")
+
+
 def cmd_predict(args: argparse.Namespace) -> None:
     """Issue risk predictions for one delivery day and log them."""
     config = load_config(args.config)
@@ -244,6 +267,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     train = sub.add_parser("train", help="train and save the risk model")
     train.set_defaults(func=cmd_train)
+
+    rolling = sub.add_parser("rolling-test", help="forecast settled days as if live, retraining each day")
+    rolling.add_argument("--start", required=True, help="first day YYYY-MM-DD")
+    rolling.add_argument("--end", required=True, help="last day YYYY-MM-DD, included")
+    rolling.set_defaults(func=cmd_rolling_test)
 
     predict = sub.add_parser("predict", help="issue predictions for a delivery day")
     predict.add_argument("--date", help="delivery date YYYY-MM-DD, default tomorrow")

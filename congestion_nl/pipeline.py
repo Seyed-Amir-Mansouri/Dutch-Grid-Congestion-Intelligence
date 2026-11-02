@@ -77,7 +77,7 @@ def build(config: Config, inputs: Inputs, label_end: pd.Timestamp | None) -> pd.
 def train(config: Config, dataset: pd.DataFrame) -> tuple[dict, dict]:
     """Train the classifier on the labelled rows of a dataset, then the inspector that vetoes its flags."""
     bundle, report = estimator.train(dataset, FEATURE_COLUMNS, config.model)
-    cache = config.resolve(config.paths.model_dir) / inspector.WALK_FORWARD_FILE
+    cache = config.resolve(config.paths.model_dir) / inspector.HISTORY_FILE
     past = inspector.walk_forward(config, dataset, FEATURE_COLUMNS, cache)
     bundle["inspector"] = inspector.fit(config, past, dataset, bundle["day_threshold"])
     veto = bundle["inspector"]
@@ -85,6 +85,43 @@ def train(config: Config, dataset: pd.DataFrame) -> tuple[dict, dict]:
         {key: veto[key] for key in ("trained_flags", "trained_correct", "cut")} if veto else "too few past flags; not trained"
     )
     return bundle, report
+
+
+def rolling_test(config: Config, dataset: pd.DataFrame, start: pd.Timestamp, end: pd.Timestamp) -> pd.DataFrame:
+    """Forecast each settled day from start to end with a predictor and inspector trained only on labels up to D-2."""
+    labelled = dataset[dataset["target"].notna()]
+    threshold = config.model.day_threshold
+    cache = config.resolve(config.paths.model_dir) / inspector.HISTORY_FILE
+    past = inspector.walk_forward(config, dataset, FEATURE_COLUMNS, cache)
+    parts = []
+    for day in pd.date_range(start, end):
+        rows = labelled[labelled["delivery_date"] == day]
+        if rows.empty:
+            continue
+        cutoff = day - pd.Timedelta(days=estimator.LABEL_GAP_DAYS)
+        bundle = estimator.fit_bundle(labelled[labelled["delivery_date"] <= cutoff], FEATURE_COLUMNS, config.model)
+        known = past.assign(target=past["target"].where(past["delivery_date"] <= cutoff))
+        bundle["inspector"] = inspector.fit(config, known, dataset, threshold)
+        scored = rows.assign(risk_probability=estimator.predict(bundle, rows))
+        days = inspector.judge(config, bundle, dataset, estimator.area_days(scored, threshold))
+        outcome = rows.groupby(schemas.AREA_KEY, as_index=False)["target"].max().rename(columns={"target": "had_request"})
+        parts.append(days.merge(outcome, on=schemas.AREA_KEY, how="left").merge(_timing(scored, threshold), on=schemas.AREA_KEY))
+        print(f"{day:%Y-%m-%d}: {int(days['day_flag'].sum())} flagged, {int(days['shown'].sum())} kept", flush=True)
+    if not parts:
+        raise ValueError("No settled days in the test window")
+    columns = schemas.AREA_KEY + ["peak_probability", "day_flag", "inspector_confidence", "shown", "had_request",
+                                  "window_start", "window_end", "request_quarters", "window_quarters", "inside_quarters"]
+    return pd.concat(parts, ignore_index=True)[columns]
+
+
+def _timing(rows: pd.DataFrame, threshold: float) -> pd.DataFrame:
+    """Per area-day: requested quarters, quarters in the risky window, and requested quarters inside that window."""
+    bounds = rows[rows["risk_probability"] >= threshold].groupby(schemas.AREA_KEY)["quarter"].agg(first="min", last="max")
+    rows = rows.join(bounds, on=schemas.AREA_KEY)
+    window = rows["quarter"].between(rows["first"], rows["last"])
+    rows = rows.assign(window=window, inside=window & (rows["target"] == 1))
+    return rows.groupby(schemas.AREA_KEY, as_index=False).agg(
+        request_quarters=("target", "sum"), window_quarters=("window", "sum"), inside_quarters=("inside", "sum"))
 
 
 def predict_day(

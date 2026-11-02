@@ -142,36 +142,40 @@ def validation_history() -> pd.DataFrame:
     return pd.read_csv(file).iloc[::-1].reset_index(drop=True)
 
 
-def walk_forward() -> pd.DataFrame:
-    """Out-of-sample predictor scores per settled area-day (monthly refits), with whether a request came."""
-    file = model_dir() / inspector.WALK_FORWARD_FILE
-
-    def build():
-        if not file.exists():
-            return pd.DataFrame()
-        scores = pd.read_csv(file, usecols=["delivery_date", "area", "peak"], parse_dates=["delivery_date"])
-        end = label_end()
-        if end is not None:
-            scores = scores[scores["delivery_date"] <= end]
-        scores = scores.merge(request_days(), on=schemas.AREA_KEY, how="left")
-        scores["had_request"] = scores["had_request"].fillna(0).astype(int)
-        return scores
-    return _cached("walk_forward", [file, path("gopacs")], build)
-
-
-def monthly_skill(threshold: float) -> pd.DataFrame:
-    """Per month: active area-days, area-days with requests, flags, correct and wrong flags, and misses."""
-    scores = walk_forward()
-    if scores.empty:
-        return scores
-    flag, hit = scores["peak"] >= threshold, scores["had_request"] == 1
-    table = scores.assign(month=scores["delivery_date"].dt.to_period("M").dt.to_timestamp(), area_days=1,
-                          requests=hit, flagged=flag, correct=flag & hit, wrong=flag & ~hit, missed=~flag & hit)
-    columns = ["area_days", "requests", "flagged", "correct", "wrong", "missed"]
-    table = table.groupby("month")[columns].sum().astype(int).reset_index()
-    table["precision"] = table["correct"] / table["flagged"].where(table["flagged"] > 0)
-    table["recall"] = table["correct"] / table["requests"].where(table["requests"] > 0)
-    return table
+def rolling_test() -> dict | None:
+    """The 14-day test: per day and in total, the predictor's flags and those the inspector kept, against requests."""
+    file = model_dir() / inspector.TEST_FILE
+    if not file.exists():
+        return None
+    scores = pd.read_csv(file, parse_dates=["delivery_date"])
+    if not {"day_flag", "shown", "had_request"} <= set(scores.columns):
+        # an older file in the same place, such as the monthly scores before they were renamed
+        return None
+    flag, shown, hit = scores["day_flag"] == 1, scores["shown"] == 1, scores["had_request"] == 1
+    table = scores.assign(requests=hit, flag_correct=flag & hit, flag_wrong=flag & ~hit, shown_correct=shown & hit,
+                          shown_wrong=shown & ~hit, saved=flag & ~shown & ~hit, lost=flag & ~shown & hit,
+                          missed=~shown & hit)
+    columns = ["requests", "flag_correct", "flag_wrong", "shown_correct", "shown_wrong", "saved", "lost", "missed"]
+    days = table.groupby("delivery_date")[columns].sum().astype(int).reset_index()
+    total = days[columns].sum().to_dict()
+    for kind in ("flag", "shown"):
+        flags = total[f"{kind}_flags"] = total[f"{kind}_correct"] + total[f"{kind}_wrong"]
+        total[f"{kind}_missed"] = total["requests"] - total[f"{kind}_correct"]
+        total[f"{kind}_precision"] = total[f"{kind}_correct"] / flags if flags else None
+        total[f"{kind}_recall"] = total[f"{kind}_correct"] / total["requests"] if total["requests"] else None
+    timing = []
+    if "inside_quarters" in scores:
+        # how well the risky window matched the requested hours, on the flags that were right about the day
+        for label, kept in (("Predictor alone", flag & hit), ("With the inspector", shown & hit)):
+            right = scores[kept]
+            asked = int(right["request_quarters"].sum())
+            timing.append((label, {"area_days": len(right), "overlap": int((right["inside_quarters"] > 0).sum()),
+                                   "asked_hours": asked / 4, "inside_hours": right["inside_quarters"].sum() / 4,
+                                   "share": right["inside_quarters"].sum() / asked if asked else None,
+                                   "window_hours": right["window_quarters"].mean() / 4 if len(right) else None}))
+    return {"days": days.to_dict("records"), "total": total, "timing": timing, "start": days["delivery_date"].min(),
+            "end": days["delivery_date"].max(), "count": len(days),
+            "made": pd.Timestamp(file.stat().st_mtime, unit="s", tz="UTC").tz_convert("Europe/Amsterdam")}
 
 
 def notices(limit: int = 12) -> pd.DataFrame:
@@ -237,7 +241,7 @@ FILE_GROUPS = [
     ("Data", [("gopacs", "GOPACS requests", "Update GOPACS"), ("notices", "Restriction notices", "Update GOPACS"),
               ("weather", "Weather forecasts", "Update weather"), ("sdac", "Day-ahead market", "Update market data"),
               ("forecasts", "System forecasts", "Update market data"), ("locations", "Area locations", "Locate areas")]),
-    ("Model", [("model", "Trained model", "Retrain model"), ("walk_forward", "Past scores for the inspector", "Retrain model")]),
+    ("Model", [("model", "Trained model", "Retrain model"), ("walk_forward", "14-day test", "Run 14-day test")]),
     ("Outputs", [("predictions", "Quarter-hour forecasts", "Issue forecast"),
                  ("area_predictions", "Area forecasts ledger", "Issue forecast"), ("validation", "Validation history", "Validate")]),
 ]
@@ -245,7 +249,8 @@ FILE_GROUPS = [
 
 def file_path(key: str) -> Path:
     """The path of a listed file, including the two model files that are not in the config."""
-    special = {"model": model_dir() / estimator.MODEL_FILE, "walk_forward": model_dir() / inspector.WALK_FORWARD_FILE}
+    special = {"model": model_dir() / estimator.MODEL_FILE, "walk_forward": model_dir() / inspector.TEST_FILE,
+               "inspector_history": model_dir() / inspector.HISTORY_FILE}
     return special.get(key) or path(key)
 
 

@@ -196,32 +196,22 @@ def activity(request):
 
 
 def performance(request):
-    """How often flags were right: the live ledger, the walk-forward record and the validation history."""
+    """How often flags were right: the 14-day test, the live ledger and the validation history."""
     context = _common(request, "performance")
     threshold = context["threshold"] or data.CONFIG.model.day_threshold
-    monthly = data.monthly_skill(threshold)
-    if len(monthly):
-        labels = [m.strftime("%b %y") for m in monthly["month"]]
-        tips = [f"{m:%B %Y}|{c} correct · {w} wrong · {r} area-days with requests"
-                for m, c, w, r in zip(monthly["month"], monthly["correct"], monthly["wrong"], monthly["requests"])]
-        context["flag_chart"] = charts.bars(labels, [("Correct", "#41609e", monthly["correct"].tolist()),
-                                                     ("Wrong", "#c9821b", monthly["wrong"].tolist())], tips,
-                                             width=600, tick_every=3)
-        p_tips = [f"{m:%B %Y}|{p:.0%} of flags correct · {r:.0%} of request area-days caught"
-                  for m, p, r in zip(monthly["month"], monthly["precision"].fillna(0), monthly["recall"].fillna(0))]
-        context["precision_chart"] = charts.line(labels, monthly["precision"].tolist(), p_tips, width=740, tick_every=3)
-        recent = monthly.tail(3)
-        context["recent"] = {
-            "flagged": int(recent["flagged"].sum()), "correct": int(recent["correct"].sum()),
-            "requests": int(recent["requests"].sum()),
-            "precision": recent["correct"].sum() / max(recent["flagged"].sum(), 1),
-            "recall": recent["correct"].sum() / max(recent["requests"].sum(), 1),
-            "from": recent["month"].iloc[0], "to": recent["month"].iloc[-1],
-        }
-        context["monthly"] = monthly.iloc[::-1].to_dict("records")
+    rolling = data.rolling_test()
+    if rolling:
+        days = rolling["days"]
+        labels = [d["delivery_date"].strftime("%d") for d in days]
+        tips = [f"{d['delivery_date']:%a %d %b}|Shown: {d['shown_correct']} correct · {d['shown_wrong']} wrong · "
+                f"{d['requests']} area-days with requests" for d in days]
+        context["flag_chart"] = charts.bars(labels, [("Correct", "#41609e", [d["shown_correct"] for d in days]),
+                                                     ("Wrong", "#c9821b", [d["shown_wrong"] for d in days])], tips,
+                                            width=1340, height=220)
     context.update(
         threshold=threshold,
         track=data.track_record().head(30).to_dict("records"),
+        rolling=rolling,
         validation=data.validation_history().head(20).to_dict("records"),
     )
     return render(request, "console/performance.html", context)

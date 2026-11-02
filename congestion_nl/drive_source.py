@@ -17,11 +17,12 @@ def file_id(link: str) -> str:
 
 
 def target(config, name: str) -> Path:
-    """Where a shared file goes: its configured path, or the model folder for the two model files."""
+    """Where a shared file goes: its configured path, or the model folder for the model files."""
     from . import estimator, inspector
 
     model_dir = config.resolve(config.paths.model_dir)
-    special = {"model": model_dir / estimator.MODEL_FILE, "walk_forward": model_dir / inspector.WALK_FORWARD_FILE}
+    special = {"model": model_dir / estimator.MODEL_FILE, "walk_forward": model_dir / inspector.TEST_FILE,
+               "inspector_history": model_dir / inspector.HISTORY_FILE}
     return special.get(name) or config.resolve(getattr(config.paths, name))
 
 
