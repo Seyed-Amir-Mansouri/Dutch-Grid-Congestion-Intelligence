@@ -25,6 +25,7 @@ class Settings:
     min_samples_leaf: int
     l2_regularization: float
     random_state: int
+    window_threshold: float = 0.2
 
 
 def _estimator(settings: Settings) -> HistGradientBoostingClassifier:
@@ -82,7 +83,7 @@ def train(dataset: pd.DataFrame, features: list[str], settings: Settings) -> tup
     report = {"train_rows": int(len(labelled))}
     results = backtest(labelled, features, settings, settings.test_days)
     if len(results):
-        days = area_days(results, settings.day_threshold)
+        days = area_days(results, settings.day_threshold, settings.window_threshold)
         report["holdout"] = score_days(days)
         report["holdout_days"] = [
             {"date": str(day.date()), **score_days(g)} for day, g in days.groupby("delivery_date")
@@ -94,9 +95,9 @@ def train(dataset: pd.DataFrame, features: list[str], settings: Settings) -> tup
     return bundle, report
 
 
-def area_days(rows: pd.DataFrame, day_threshold: float) -> pd.DataFrame:
+def area_days(rows: pd.DataFrame, day_threshold: float, window_threshold: float | None = None) -> pd.DataFrame:
     """Summarise quarter-hour forecasts per area and day: peak probability, expected quarters and the risky window."""
-    rows = rows.assign(risky=rows["risk_probability"] >= day_threshold)
+    rows = rows.assign(risky=rows["risk_probability"] >= (day_threshold if window_threshold is None else window_threshold))
     group = rows.groupby(["delivery_date", "area"])
     days = group.agg(
         peak_probability=("risk_probability", "max"),

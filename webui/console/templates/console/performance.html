@@ -47,7 +47,7 @@
       <td class="num mono">{% if t.share is not None %}{% widthratio t.share 1 100 %}%{% else %}–{% endif %}</td>
       <td class="num mono">{% if t.window_hours is not None %}{{ t.window_hours|floatformat:1 }} h{% else %}–{% endif %}</td></tr>{% endfor %}</tbody>
   </table></div>
-  <p class="muted small pad">The window runs from the first to the last quarter-hour at or above {{ threshold }}. A wider window catches more requested hours, so read the share together with the window length.</p>
+  <p class="muted small pad">The window runs from the first to the last quarter-hour at or above {{ window_threshold }}. A wider window catches more requested hours, so read the share together with the window length.</p>
   {% endif %}
   <div class="table-scroll"><table class="table compact">
     <thead><tr><th>Day</th><th class="num">Requests</th><th class="num">Predictor ✓</th><th class="num">Predictor ✕</th><th class="num">Shown ✓</th><th class="num">Shown ✕</th><th class="num">Vetoed ✕</th><th class="num">Vetoed ✓</th><th class="num">Missed</th></tr></thead>

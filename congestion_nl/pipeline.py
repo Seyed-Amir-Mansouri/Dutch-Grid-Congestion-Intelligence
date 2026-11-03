@@ -90,7 +90,7 @@ def train(config: Config, dataset: pd.DataFrame) -> tuple[dict, dict]:
 def rolling_test(config: Config, dataset: pd.DataFrame, start: pd.Timestamp, end: pd.Timestamp) -> pd.DataFrame:
     """Forecast each settled day from start to end with a predictor and inspector trained only on labels up to D-2."""
     labelled = dataset[dataset["target"].notna()]
-    threshold = config.model.day_threshold
+    threshold, window = config.model.day_threshold, config.model.window_threshold
     cache = config.resolve(config.paths.model_dir) / inspector.HISTORY_FILE
     past = inspector.walk_forward(config, dataset, FEATURE_COLUMNS, cache)
     parts = []
@@ -103,9 +103,9 @@ def rolling_test(config: Config, dataset: pd.DataFrame, start: pd.Timestamp, end
         known = past.assign(target=past["target"].where(past["delivery_date"] <= cutoff))
         bundle["inspector"] = inspector.fit(config, known, dataset, threshold)
         scored = rows.assign(risk_probability=estimator.predict(bundle, rows))
-        days = inspector.judge(config, bundle, dataset, estimator.area_days(scored, threshold))
+        days = inspector.judge(config, bundle, dataset, estimator.area_days(scored, threshold, window))
         outcome = rows.groupby(schemas.AREA_KEY, as_index=False)["target"].max().rename(columns={"target": "had_request"})
-        parts.append(days.merge(outcome, on=schemas.AREA_KEY, how="left").merge(_timing(scored, threshold), on=schemas.AREA_KEY))
+        parts.append(days.merge(outcome, on=schemas.AREA_KEY, how="left").merge(_timing(scored, window), on=schemas.AREA_KEY))
         print(f"{day:%Y-%m-%d}: {int(days['day_flag'].sum())} flagged, {int(days['shown'].sum())} kept", flush=True)
     if not parts:
         raise ValueError("No settled days in the test window")
@@ -150,7 +150,7 @@ def area_forecast(
     dataset: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """Summarise quarter-hour predictions per area for the day, most likely areas first, with the inspector's verdict."""
-    days = estimator.area_days(predictions, bundle["day_threshold"])
+    days = estimator.area_days(predictions, bundle["day_threshold"], config.model.window_threshold if config else None)
     if config is not None and dataset is not None:
         days = inspector.judge(config, bundle, dataset, days)
     else:

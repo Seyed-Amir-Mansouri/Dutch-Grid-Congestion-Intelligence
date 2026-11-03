@@ -210,6 +210,7 @@ def performance(request):
                                             width=1340, height=220)
     context.update(
         threshold=threshold,
+        window_threshold=data.CONFIG.model.window_threshold,
         track=data.track_record().head(30).to_dict("records"),
         rolling=rolling,
         validation=data.validation_history().head(20).to_dict("records"),
@@ -240,6 +241,7 @@ def model(request):
         ("Forecast issued at", f"{config.features.issue_hour}:00 the day before"),
         ("Area active if a request in the last", f"{config.features.active_days} days"),
         ("Day flag threshold", f"{config.model.day_threshold}"),
+        ("Risky window from", f"{config.model.window_threshold} per quarter-hour"),
         ("Inspector veto below", f"{config.inspector.veto_cut:.0%} confidence"),
         ("Inspector learns from", f"{config.inspector.start_date:%b %Y}"),
         ("Validation window", f"{config.validation.window_days} days"),
