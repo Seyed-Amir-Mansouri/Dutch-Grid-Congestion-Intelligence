@@ -179,7 +179,8 @@ def cmd_rolling_test(args: argparse.Namespace) -> None:
     kept = result[shown & hit]
     if len(kept):
         print(f"timing on correct shown flags: {int(kept['inside_quarters'].sum())} of {int(kept['request_quarters'].sum())} "
-              f"requested quarter-hours inside the window, windows {kept['window_quarters'].mean() / 4:.1f} h on average")
+              f"requested quarter-hours inside the window, windows {kept['window_quarters'].mean() / 4:.1f} h on average, "
+              f"precision {kept['inside_quarters'].sum() / max(kept['window_quarters'].sum(), 1):.0%}")
     print(f"saved: {path}")
 
 

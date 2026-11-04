@@ -114,67 +114,33 @@ def forecast(day: pd.Timestamp) -> pd.DataFrame:
     return rows.sort_values("peak_probability", ascending=False).reset_index(drop=True)
 
 
-def track_record() -> pd.DataFrame:
-    """Per settled forecast day: flags shown by the inspector, how many were right, and requests missed."""
-    found = area_ledger()
-    end = label_end()
-    if found is None or end is None:
-        return pd.DataFrame()
-    latest = found[found["delivery_date"] <= end].sort_values("issued_at").drop_duplicates(schemas.AREA_KEY, keep="last")
-    if latest.empty:
-        return pd.DataFrame()
-    latest = latest.merge(request_days(), on=schemas.AREA_KEY, how="left").fillna({"had_request": 0})
-    hit = latest["had_request"] == 1
-    shown, flagged = latest["shown"] == 1, latest["day_flag"] == 1
-    out = latest.assign(
-        shown_correct=shown & hit, shown_wrong=shown & ~hit, vetoed_wrong=flagged & ~shown & ~hit,
-        vetoed_correct=flagged & ~shown & hit, missed=~shown & hit, requests=hit,
-    )
-    columns = ["shown_correct", "shown_wrong", "vetoed_wrong", "vetoed_correct", "missed", "requests"]
-    return out.groupby("delivery_date")[columns].sum().astype(int).sort_index(ascending=False).reset_index()
-
-
-def validation_history() -> pd.DataFrame:
-    """Rows written by the validate command, newest first."""
-    file = path("validation")
-    if not file.exists():
-        return pd.DataFrame()
-    return pd.read_csv(file).iloc[::-1].reset_index(drop=True)
-
-
 def rolling_test() -> dict | None:
-    """The 14-day test: per day and in total, the predictor's flags and those the inspector kept, against requests."""
+    """The 14-day test as on the results page: area-days and requests, actual against the flags the inspector kept."""
     file = model_dir() / inspector.TEST_FILE
     if not file.exists():
         return None
     scores = pd.read_csv(file, parse_dates=["delivery_date"])
-    if not {"day_flag", "shown", "had_request"} <= set(scores.columns):
+    if not {"shown", "had_request"} <= set(scores.columns):
         # an older file in the same place, such as the monthly scores before they were renamed
         return None
-    flag, shown, hit = scores["day_flag"] == 1, scores["shown"] == 1, scores["had_request"] == 1
-    table = scores.assign(requests=hit, flag_correct=flag & hit, flag_wrong=flag & ~hit, shown_correct=shown & hit,
-                          shown_wrong=shown & ~hit, saved=flag & ~shown & ~hit, lost=flag & ~shown & hit,
-                          missed=~shown & hit)
-    columns = ["requests", "flag_correct", "flag_wrong", "shown_correct", "shown_wrong", "saved", "lost", "missed"]
-    days = table.groupby("delivery_date")[columns].sum().astype(int).reset_index()
-    total = days[columns].sum().to_dict()
-    for kind in ("flag", "shown"):
-        flags = total[f"{kind}_flags"] = total[f"{kind}_correct"] + total[f"{kind}_wrong"]
-        total[f"{kind}_missed"] = total["requests"] - total[f"{kind}_correct"]
-        total[f"{kind}_precision"] = total[f"{kind}_correct"] / flags if flags else None
-        total[f"{kind}_recall"] = total[f"{kind}_correct"] / total["requests"] if total["requests"] else None
-    timing = []
-    if "inside_quarters" in scores:
-        # how well the risky window matched the requested hours, on the flags that were right about the day
-        for label, kept in (("Predictor alone", flag & hit), ("With the inspector", shown & hit)):
-            right = scores[kept]
-            asked = int(right["request_quarters"].sum())
-            timing.append((label, {"area_days": len(right), "overlap": int((right["inside_quarters"] > 0).sum()),
-                                   "asked_hours": asked / 4, "inside_hours": right["inside_quarters"].sum() / 4,
-                                   "share": right["inside_quarters"].sum() / asked if asked else None,
-                                   "window_hours": right["window_quarters"].mean() / 4 if len(right) else None}))
-    return {"days": days.to_dict("records"), "total": total, "timing": timing, "start": days["delivery_date"].min(),
-            "end": days["delivery_date"].max(), "count": len(days),
+    start, end = scores["delivery_date"].min(), scores["delivery_date"].max()
+    shown, hit = scores["shown"] == 1, scores["had_request"] == 1
+    flagged = set(zip(scores.loc[shown, "delivery_date"], scores.loc[shown, "area"]))
+    asked = request_days()
+    asked = asked[asked["delivery_date"].between(start, end)]
+    # a request belongs to the area-day it starts on
+    found = events()
+    starts = found["start_time"].dt.normalize()
+    found = found[starts.between(start, end)]
+    caught = sum(key in flagged for key in zip(found["start_time"].dt.normalize(), found["area"]))
+    right = int((shown & hit).sum())
+    row = {"asked_days": len(asked), "requests": len(found), "flagged": int(shown.sum()), "right": right,
+           "wrong": int((shown & ~hit).sum()), "missed_days": len(asked) - right, "caught": caught,
+           "missed_requests": len(found) - caught}
+    for key, part, whole in (("right", "right", "flagged"), ("wrong", "wrong", "flagged"), ("caught", "caught", "requests"),
+                             ("missed_requests", "missed_requests", "requests")):
+        row[f"{key}_pct"] = f"{100 * row[part] / row[whole]:.0f}%" if row[whole] else ""
+    return {"row": row, "start": start, "end": end, "count": scores["delivery_date"].nunique(),
             "made": pd.Timestamp(file.stat().st_mtime, unit="s", tz="UTC").tz_convert("Europe/Amsterdam")}
 
 

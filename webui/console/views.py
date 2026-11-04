@@ -196,25 +196,9 @@ def activity(request):
 
 
 def performance(request):
-    """How often flags were right: the 14-day test, the live ledger and the validation history."""
+    """The 14-day test: area-days and requests, actual against the flags the inspector kept."""
     context = _common(request, "performance")
-    threshold = context["threshold"] or data.CONFIG.model.day_threshold
-    rolling = data.rolling_test()
-    if rolling:
-        days = rolling["days"]
-        labels = [d["delivery_date"].strftime("%d") for d in days]
-        tips = [f"{d['delivery_date']:%a %d %b}|Shown: {d['shown_correct']} correct · {d['shown_wrong']} wrong · "
-                f"{d['requests']} area-days with requests" for d in days]
-        context["flag_chart"] = charts.bars(labels, [("Correct", "#41609e", [d["shown_correct"] for d in days]),
-                                                     ("Wrong", "#c9821b", [d["shown_wrong"] for d in days])], tips,
-                                            width=1340, height=220)
-    context.update(
-        threshold=threshold,
-        window_threshold=data.CONFIG.model.window_threshold,
-        track=data.track_record().head(30).to_dict("records"),
-        rolling=rolling,
-        validation=data.validation_history().head(20).to_dict("records"),
-    )
+    context.update(threshold=context["threshold"] or data.CONFIG.model.day_threshold, rolling=data.rolling_test())
     return render(request, "console/performance.html", context)
 
 
