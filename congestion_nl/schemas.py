@@ -18,6 +18,8 @@ LOCATION_COLUMNS =["area", "lat", "lon", "cell", "source"]
 
 EXCLUSION_COLUMNS = ["operator", "announced_from", "announced_to", "reason"]
 
+HOLIDAY_COLUMNS = ["school_year", "holiday", "region", "start", "end"]
+
 PREDICTION_COLUMNS = KEY + ["issued_at", "model_version", "risk_probability"]
 
 AREA_DAY_COLUMNS = [

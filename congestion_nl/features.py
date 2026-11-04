@@ -71,6 +71,12 @@ FEATURE_COLUMNS += WEATHER_FEATURES
 NOTICE_FEATURES = ["notice_day", "notice_up", "notice_down", "notice_q"]
 FEATURE_COLUMNS += NOTICE_FEATURES
 
+# new offtake areas tend to start after the autumn clock change; school holidays per region shift load and feed-in
+CLOCK_FEATURES = ["days_since_clock_change", "winter_time"]
+SCHOOL_FEATURES = ["school_holiday", "school_regions_on", "days_since_school_holiday"]
+SCHOOL_REGIONS = ["noord", "midden", "zuid"]
+FEATURE_COLUMNS += CLOCK_FEATURES + SCHOOL_FEATURES
+
 
 def weather_features(weather: pd.DataFrame) -> pd.DataFrame:
     """Turn hourly cell forecasts into quarter-hour features with changes against the previous days."""
@@ -95,6 +101,49 @@ def weather_features(weather: pd.DataFrame) -> pd.DataFrame:
     quarters["radiation_change"] = quarters["radiation_wm2"] - by_slot["radiation_wm2"].shift(1)
     quarters["wind_100m_change"] = quarters["wind_100m_kmh"] - by_slot["wind_100m_kmh"].shift(1)
     return quarters.merge(day, on=["cell", "delivery_date"], how="left")[schemas.MARKET_KEY + ["cell"] + WEATHER_FEATURES]
+
+
+def clock_features(days: pd.DatetimeIndex) -> pd.DataFrame:
+    """Whether winter time applies on each day, and the days since the last clock change, capped at 60."""
+    span = pd.date_range(days.min() - pd.Timedelta(days=366), days.max())
+    noon = (span + pd.Timedelta(hours=12)).tz_localize("Europe/Amsterdam")
+    winter = pd.Series(noon.tz_localize(None) - noon.tz_convert("UTC").tz_localize(None) == pd.Timedelta(hours=1), index=span)
+    changed = pd.Series(span.where(winter != winter.shift(1)), index=span)
+    changed.iloc[0] = pd.NaT
+    since = (span - pd.DatetimeIndex(changed.ffill())).days
+    out = pd.DataFrame({"delivery_date": span, "winter_time": winter.to_numpy(float), "days_since_clock_change": np.minimum(since, 60)})
+    return out[out["delivery_date"] >= days.min()]
+
+
+def school_region(lat: float, lon: float) -> str:
+    """The school-holiday region, roughly by location: south below the rivers, north above the IJssel and Amsterdam."""
+    if lat < 51.85:
+        return "zuid"
+    if lat >= 52.3 or (lat >= 52.2 and lon >= 6.1):
+        return "noord"
+    return "midden"
+
+
+def school_features(holidays: pd.DataFrame, days: pd.DatetimeIndex) -> pd.DataFrame:
+    """Per region and day: whether schools are off, how many regions are off, and the days since the last holiday ended.
+
+    Days outside the school years in the holiday file stay empty.
+    """
+    rows = []
+    for region in SCHOOL_REGIONS:
+        off = pd.Series(False, index=days)
+        for holiday in holidays[holidays["region"].isin([region, "heel nederland"])].itertuples():
+            off[(days >= holiday.start) & (days <= holiday.end)] = True
+        ended = off.shift(1, fill_value=False) & ~off
+        last_end = pd.Series(days.where(ended), index=days).ffill()
+        since = (days - pd.DatetimeIndex(last_end)).days.to_numpy(float)
+        rows.append(pd.DataFrame({"delivery_date": days, "school_region": region, "school_holiday": off.to_numpy(float),
+                                  "days_since_school_holiday": np.where(off, 0, np.minimum(since, 30))}))
+    out = pd.concat(rows, ignore_index=True)
+    out["school_regions_on"] = out.groupby("delivery_date")["school_holiday"].transform("sum")
+    first = pd.Timestamp(f"{holidays['school_year'].min()[:4]}-08-01")
+    out.loc[(out["delivery_date"] < first) | (out["delivery_date"] > holidays["end"].max()), SCHOOL_FEATURES] = np.nan
+    return out
 
 
 def area_table(locations: pd.DataFrame, events: pd.DataFrame) -> pd.DataFrame:
@@ -244,6 +293,7 @@ def build_dataset(
     areas: pd.DataFrame,
     label_end: pd.Timestamp | None,
     notices: pd.DataFrame | None = None,
+    holidays: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """Join inputs and build features for active areas, with the target set for dates up to label_end."""
     settings = config.features
@@ -278,6 +328,15 @@ def build_dataset(
     else:
         frame = frame.merge(known, on=schemas.KEY, how="left")
         frame[NOTICE_FEATURES] = frame[NOTICE_FEATURES].astype(float).fillna(0)
+    days = pd.date_range(frame["delivery_date"].min(), frame["delivery_date"].max())
+    frame = frame.merge(clock_features(days), on="delivery_date", how="left")
+    if holidays is None or holidays.empty:
+        frame[SCHOOL_FEATURES] = 0.0
+    else:
+        regions = {area.area: school_region(area.area_lat, area.area_lon) for area in areas.itertuples()}
+        frame["school_region"] = frame["area"].map(regions)
+        frame = frame.merge(school_features(holidays, days), on=["delivery_date", "school_region"], how="left")
+        frame = frame.drop(columns="school_region")
     frame = frame.sort_values(schemas.KEY).reset_index(drop=True)
 
     labelled = label_grid(frame[schemas.KEY], events)

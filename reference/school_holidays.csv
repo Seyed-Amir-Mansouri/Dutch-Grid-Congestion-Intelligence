@@ -1,0 +1,78 @@
+school_year,holiday,region,start,end
+2023-2024,Herfstvakantie,noord,2023-10-21,2023-10-29
+2023-2024,Herfstvakantie,midden,2023-10-21,2023-10-29
+2023-2024,Herfstvakantie,zuid,2023-10-14,2023-10-22
+2023-2024,Kerstvakantie,heel nederland,2023-12-23,2024-01-07
+2023-2024,Voorjaarsvakantie,noord,2024-02-17,2024-02-25
+2023-2024,Voorjaarsvakantie,midden,2024-02-17,2024-02-25
+2023-2024,Voorjaarsvakantie,zuid,2024-02-10,2024-02-18
+2023-2024,Meivakantie,heel nederland,2024-04-27,2024-05-05
+2023-2024,Zomervakantie,noord,2024-07-20,2024-09-01
+2023-2024,Zomervakantie,midden,2024-07-13,2024-08-25
+2023-2024,Zomervakantie,zuid,2024-07-06,2024-08-18
+2024-2025,Herfstvakantie,noord,2024-10-26,2024-11-03
+2024-2025,Herfstvakantie,midden,2024-10-26,2024-11-03
+2024-2025,Herfstvakantie,zuid,2024-10-19,2024-10-27
+2024-2025,Kerstvakantie,heel nederland,2024-12-21,2025-01-05
+2024-2025,Voorjaarsvakantie,noord,2025-02-15,2025-02-23
+2024-2025,Voorjaarsvakantie,midden,2025-02-22,2025-03-02
+2024-2025,Voorjaarsvakantie,zuid,2025-02-22,2025-03-02
+2024-2025,Meivakantie,heel nederland,2025-04-26,2025-05-04
+2024-2025,Zomervakantie,noord,2025-07-12,2025-08-24
+2024-2025,Zomervakantie,midden,2025-07-19,2025-08-31
+2024-2025,Zomervakantie,zuid,2025-07-05,2025-08-17
+2025-2026,Herfstvakantie,noord,2025-10-18,2025-10-26
+2025-2026,Herfstvakantie,midden,2025-10-18,2025-10-26
+2025-2026,Herfstvakantie,zuid,2025-10-11,2025-10-19
+2025-2026,Kerstvakantie,heel nederland,2025-12-20,2026-01-04
+2025-2026,Voorjaarsvakantie,noord,2026-02-21,2026-03-01
+2025-2026,Voorjaarsvakantie,midden,2026-02-14,2026-02-22
+2025-2026,Voorjaarsvakantie,zuid,2026-02-14,2026-02-22
+2025-2026,Meivakantie,heel nederland,2026-04-25,2026-05-03
+2025-2026,Zomervakantie,noord,2026-07-04,2026-08-16
+2025-2026,Zomervakantie,midden,2026-07-18,2026-08-30
+2025-2026,Zomervakantie,zuid,2026-07-11,2026-08-23
+2026-2027,Herfstvakantie,noord,2026-10-10,2026-10-18
+2026-2027,Herfstvakantie,midden,2026-10-17,2026-10-25
+2026-2027,Herfstvakantie,zuid,2026-10-17,2026-10-25
+2026-2027,Kerstvakantie,heel nederland,2026-12-19,2027-01-03
+2026-2027,Voorjaarsvakantie,noord,2027-02-20,2027-02-28
+2026-2027,Voorjaarsvakantie,midden,2027-02-20,2027-02-28
+2026-2027,Voorjaarsvakantie,zuid,2027-02-13,2027-02-21
+2026-2027,Meivakantie,heel nederland,2027-04-24,2027-05-02
+2026-2027,Zomervakantie,noord,2027-07-10,2027-08-22
+2026-2027,Zomervakantie,midden,2027-07-17,2027-08-29
+2026-2027,Zomervakantie,zuid,2027-07-24,2027-09-05
+2027-2028,Herfstvakantie,noord,2027-10-16,2027-10-24
+2027-2028,Herfstvakantie,midden,2027-10-16,2027-10-24
+2027-2028,Herfstvakantie,zuid,2027-10-23,2027-10-31
+2027-2028,Kerstvakantie,heel nederland,2027-12-25,2028-01-09
+2027-2028,Voorjaarsvakantie,noord,2028-02-19,2028-02-27
+2027-2028,Voorjaarsvakantie,midden,2028-02-26,2028-03-05
+2027-2028,Voorjaarsvakantie,zuid,2028-02-26,2028-03-05
+2027-2028,Meivakantie,heel nederland,2028-04-29,2028-05-07
+2027-2028,Zomervakantie,noord,2028-07-15,2028-08-27
+2027-2028,Zomervakantie,midden,2028-07-08,2028-08-20
+2027-2028,Zomervakantie,zuid,2028-07-22,2028-09-03
+2028-2029,Herfstvakantie,noord,2028-10-14,2028-10-22
+2028-2029,Herfstvakantie,midden,2028-10-21,2028-10-29
+2028-2029,Herfstvakantie,zuid,2028-10-21,2028-10-29
+2028-2029,Kerstvakantie,heel nederland,2028-12-23,2029-01-07
+2028-2029,Voorjaarsvakantie,noord,2029-02-17,2029-02-25
+2028-2029,Voorjaarsvakantie,midden,2029-02-17,2029-02-25
+2028-2029,Voorjaarsvakantie,zuid,2029-02-10,2029-02-18
+2028-2029,Meivakantie,heel nederland,2029-04-28,2029-05-06
+2028-2029,Zomervakantie,noord,2029-07-21,2029-09-02
+2028-2029,Zomervakantie,midden,2029-07-07,2029-08-19
+2028-2029,Zomervakantie,zuid,2029-07-14,2029-08-26
+2029-2030,Herfstvakantie,noord,2029-10-20,2029-10-28
+2029-2030,Herfstvakantie,midden,2029-10-20,2029-10-28
+2029-2030,Herfstvakantie,zuid,2029-10-13,2029-10-21
+2029-2030,Kerstvakantie,heel nederland,2029-12-22,2030-01-06
+2029-2030,Voorjaarsvakantie,noord,2030-02-16,2030-02-24
+2029-2030,Voorjaarsvakantie,midden,2030-02-23,2030-03-03
+2029-2030,Voorjaarsvakantie,zuid,2030-02-23,2030-03-03
+2029-2030,Meivakantie,heel nederland,2030-04-27,2030-05-05
+2029-2030,Zomervakantie,noord,2030-07-20,2030-09-01
+2029-2030,Zomervakantie,midden,2030-07-13,2030-08-25
+2029-2030,Zomervakantie,zuid,2030-07-06,2030-08-18

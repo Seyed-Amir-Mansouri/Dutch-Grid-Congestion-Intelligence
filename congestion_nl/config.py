@@ -23,6 +23,7 @@ class Paths:
     csc_report: Path
     manual_locations: Path
     excluded_requests: Path
+    school_holidays: Path
     locations: Path
     model_dir: Path
     predictions: Path

@@ -73,6 +73,16 @@ def load_exclusions(path: Path) -> pd.DataFrame:
     return frame
 
 
+def load_school_holidays(path: Path) -> pd.DataFrame:
+    """Load the school holidays per region, or an empty table when there is no file."""
+    if not path.exists():
+        return pd.DataFrame(columns=schemas.HOLIDAY_COLUMNS)
+    frame = _read_csv(path, schemas.HOLIDAY_COLUMNS)
+    frame["start"] = pd.to_datetime(frame["start"])
+    frame["end"] = pd.to_datetime(frame["end"])
+    return frame
+
+
 def load_locations(path: Path) -> pd.DataFrame:
     """Load the located areas written by the locate command."""
     if not path.exists():
