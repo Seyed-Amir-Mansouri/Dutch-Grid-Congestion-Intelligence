@@ -115,7 +115,7 @@ def forecast(day: pd.Timestamp) -> pd.DataFrame:
 
 
 def rolling_test() -> dict | None:
-    """The 14-day test as on the results page: area-days and requests, actual against the flags the inspector kept."""
+    """The test as on the results page, per 14-day window: area-days and requests, actual against the kept flags."""
     file = model_dir() / inspector.TEST_FILE
     if not file.exists():
         return None
@@ -124,23 +124,30 @@ def rolling_test() -> dict | None:
         # an older file in the same place, such as the monthly scores before they were renamed
         return None
     start, end = scores["delivery_date"].min(), scores["delivery_date"].max()
-    shown, hit = scores["shown"] == 1, scores["had_request"] == 1
-    flagged = set(zip(scores.loc[shown, "delivery_date"], scores.loc[shown, "area"]))
-    asked = request_days()
-    asked = asked[asked["delivery_date"].between(start, end)]
-    # a request belongs to the area-day it starts on
-    found = events()
-    starts = found["start_time"].dt.normalize()
-    found = found[starts.between(start, end)]
-    caught = sum(key in flagged for key in zip(found["start_time"].dt.normalize(), found["area"]))
-    right = int((shown & hit).sum())
-    row = {"asked_days": len(asked), "requests": len(found), "flagged": int(shown.sum()), "right": right,
-           "wrong": int((shown & ~hit).sum()), "missed_days": len(asked) - right, "caught": caught,
-           "missed_requests": len(found) - caught}
-    for key, part, whole in (("right", "right", "flagged"), ("wrong", "wrong", "flagged"), ("caught", "caught", "requests"),
-                             ("missed_requests", "missed_requests", "requests")):
-        row[f"{key}_pct"] = f"{100 * row[part] / row[whole]:.0f}%" if row[whole] else ""
-    return {"row": row, "start": start, "end": end, "count": scores["delivery_date"].nunique(),
+    asked, found = request_days(), events()
+
+    def row(first: pd.Timestamp, last: pd.Timestamp) -> dict:
+        part = scores[scores["delivery_date"].between(first, last)]
+        shown, hit = part["shown"] == 1, part["had_request"] == 1
+        flagged = set(zip(part.loc[shown, "delivery_date"], part.loc[shown, "area"]))
+        days = asked[asked["delivery_date"].between(first, last)]
+        # a request belongs to the area-day it starts on
+        starts = found["start_time"].dt.normalize()
+        requests = found[starts.between(first, last)]
+        caught = sum(key in flagged for key in zip(requests["start_time"].dt.normalize(), requests["area"]))
+        right = int((shown & hit).sum())
+        out = {"start": first, "end": last, "asked_days": len(days), "requests": len(requests), "flagged": int(shown.sum()),
+               "right": right, "wrong": int((shown & ~hit).sum()), "missed_days": len(days) - right, "caught": caught,
+               "missed_requests": len(requests) - caught}
+        for key, whole in (("right", "flagged"), ("wrong", "flagged"), ("caught", "requests"), ("missed_requests", "requests")):
+            out[f"{key}_pct"] = f"{100 * out[key] / out[whole]:.0f}%" if out[whole] else ""
+        return out
+
+    # consecutive 14-day windows from the first test day, then the whole test when there is more than one
+    window = pd.Timedelta(days=CONFIG.validation.window_days)
+    rows = [row(first, min(first + window - pd.Timedelta(days=1), end)) for first in pd.date_range(start, end, freq=window)]
+    total = row(start, end) if len(rows) > 1 else None
+    return {"rows": rows, "total": total, "start": start, "end": end, "count": scores["delivery_date"].nunique(),
             "made": pd.Timestamp(file.stat().st_mtime, unit="s", tz="UTC").tz_convert("Europe/Amsterdam")}
 
 
@@ -213,7 +220,7 @@ FILE_GROUPS = [
     ("Data", [("gopacs", "GOPACS requests", "Update GOPACS"), ("notices", "Restriction notices", "Update GOPACS"),
               ("weather", "Weather forecasts", "Update weather"), ("sdac", "Day-ahead market", "Update market data"),
               ("forecasts", "System forecasts", "Update market data"), ("locations", "Area locations", "Locate areas")]),
-    ("Model", [("model", "Trained model", "Retrain model"), ("walk_forward", "14-day test", "Run 14-day test")]),
+    ("Model", [("model", "Trained model", "Retrain model"), ("walk_forward", "Test (14-day windows)", "Run test")]),
     ("Outputs", [("predictions", "Quarter-hour forecasts", "Issue forecast"),
                  ("area_predictions", "Area forecasts ledger", "Issue forecast"), ("validation", "Validation history", "Validate")]),
 ]

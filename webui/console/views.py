@@ -196,7 +196,7 @@ def activity(request):
 
 
 def performance(request):
-    """The 14-day test: area-days and requests, actual against the flags the inspector kept."""
+    """The test in 14-day windows: area-days and requests, actual against the flags the inspector kept."""
     context = _common(request, "performance")
     context.update(threshold=context["threshold"] or data.CONFIG.model.day_threshold, rolling=data.rolling_test())
     return render(request, "console/performance.html", context)

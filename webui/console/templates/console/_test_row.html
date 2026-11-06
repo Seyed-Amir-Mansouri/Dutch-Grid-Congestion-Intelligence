@@ -1,0 +1,6 @@
+<tr{% if total %} class="total"{% endif %}><td>{% if total %}<b>All {{ rolling.count }} days</b>{% else %}{{ r.start|date:"j M" }} – {{ r.end|date:"j M" }}{% endif %}</td>
+  <td class="num mono">{{ r.asked_days }}</td><td class="num mono">{{ r.requests }}</td>
+  <td class="num mono">{{ r.flagged }}</td><td class="num mono">{{ r.right }} <span class="muted">{{ r.right_pct }}</span></td>
+  <td class="num mono">{{ r.wrong }} <span class="muted">{{ r.wrong_pct }}</span></td><td class="num mono">{{ r.missed_days }}</td>
+  <td class="num mono">{{ r.caught }} <span class="muted">{{ r.caught_pct }}</span></td>
+  <td class="num mono">{{ r.missed_requests }} <span class="muted">{{ r.missed_requests_pct }}</span></td></tr>

@@ -107,10 +107,10 @@ def steps() -> list[dict]:
         {"key": "validate", "title": "Validate", "kind": "model",
          "text": "Score settled forecasts against GOPACS requests and append to the validation history.",
          "fields": [{"name": "as_of", "label": "As of", "type": "date", "value": today}]},
-        {"key": "rolling", "title": "Run 14-day test", "kind": "model",
+        {"key": "rolling", "title": "Run test", "kind": "model",
          "text": "Forecast settled days as if live: retrain the predictor and inspector for each day on what was known "
-                 "two days before, then score against GOPACS. About a minute and a half per day.",
-         "fields": [{"name": "start", "label": "From", "type": "date", "value": test_end - timedelta(days=13)},
+                 "two days before, then score against GOPACS in 14-day windows. Three windows take about an hour.",
+         "fields": [{"name": "start", "label": "From", "type": "date", "value": test_end - timedelta(days=41)},
                     {"name": "end", "label": "To", "type": "date", "value": test_end}]},
     ]
     for step in found:

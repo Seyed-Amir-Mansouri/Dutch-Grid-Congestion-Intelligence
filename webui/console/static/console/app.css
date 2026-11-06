@@ -133,6 +133,7 @@ input[type=date]:focus, select:focus, .btn:focus-visible { outline: 2px solid va
 .table th.num { text-align: right; }
 .table td { padding: 10px 12px; border-bottom: 1px solid #eef0f2; vertical-align: middle; }
 .table tbody tr:hover td { background: #f9fafb; }
+.table tr.total td { border-top: 2px solid #d5d9de; font-weight: 600; }
 .table.compact td { padding: 8px 20px; }
 .table.compact td + td { padding-left: 8px; }
 .table td:first-child, .table th:first-child { padding-left: 20px; }

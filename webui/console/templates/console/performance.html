@@ -2,13 +2,13 @@
 {% block title %}Performance{% endblock %}
 {% block eyebrow %}Forecast quality{% endblock %}
 {% block heading %}Performance{% endblock %}
-{% block lede %}The 14-day test: each day forecast as if live, with the predictor and inspector retrained on what was known two days before it.{% endblock %}
+{% block lede %}The test in 14-day windows: each day forecast as if live, with the predictor and inspector retrained on what was known two days before it.{% endblock %}
 
 {% block content %}
 <section class="panel">
   <header class="panel-head"><h2>Actual vs flagged</h2>
     <span class="muted">{% if rolling %}{{ rolling.start|date:"j M" }}–{{ rolling.end|date:"j M Y" }} · {{ rolling.count }} days · run {{ rolling.made|date:"j M, H:i" }}{% endif %}</span></header>
-  {% if rolling %}{% with r=rolling.row %}
+  {% if rolling %}
   <div class="table-scroll"><table class="table">
     <thead>
       <tr><th></th><th class="num" colspan="2">Actual</th><th class="num" colspan="6">With inspector</th></tr>
@@ -16,14 +16,11 @@
         <th class="num">Area-days<br>flagged</th><th class="num">Right</th><th class="num">Wrong</th><th class="num">Area-days<br>missed</th>
         <th class="num">Requests<br>caught</th><th class="num">Requests<br>missed</th></tr>
     </thead>
-    <tbody><tr><td>{{ rolling.start|date:"j M" }} – {{ rolling.end|date:"j M" }}</td>
-      <td class="num mono">{{ r.asked_days }}</td><td class="num mono">{{ r.requests }}</td>
-      <td class="num mono">{{ r.flagged }}</td><td class="num mono">{{ r.right }} <span class="muted">{{ r.right_pct }}</span></td>
-      <td class="num mono">{{ r.wrong }} <span class="muted">{{ r.wrong_pct }}</span></td><td class="num mono">{{ r.missed_days }}</td>
-      <td class="num mono">{{ r.caught }} <span class="muted">{{ r.caught_pct }}</span></td>
-      <td class="num mono">{{ r.missed_requests }} <span class="muted">{{ r.missed_requests_pct }}</span></td></tr></tbody>
+    <tbody>
+      {% for r in rolling.rows %}{% include "console/_test_row.html" %}{% endfor %}
+      {% if rolling.total %}{% with r=rolling.total total=True %}{% include "console/_test_row.html" %}{% endwith %}{% endif %}
+    </tbody>
   </table></div>
-  {% endwith %}
-  {% else %}<p class="muted pad">Not run yet. Start <b>Run 14-day test</b> on the Operations page.</p>{% endif %}
+  {% else %}<p class="muted pad">Not run yet. Start <b>Run test</b> on the Operations page.</p>{% endif %}
 </section>
 {% endblock %}
