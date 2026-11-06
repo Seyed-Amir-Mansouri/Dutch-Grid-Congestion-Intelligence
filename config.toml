@@ -59,20 +59,7 @@ learn_from = 0.15
 window_days = 14
 min_skill = 0.0
 
-# Google Drive file IDs (or share links) for Operations > Download from Drive and app.bat's first start
+# Google Drive file ID (or share link) of one zip with every data and model file,
+# unpacked into place by Operations > Download from Drive and app.bat's first start
 [drive]
-# one zip with every file below; when set, Download from Drive fetches only this and unpacks it
-bundle = ""
-gopacs = "19qdXW2odRWdzQFxRaJmCrRlseyKm9hmA"
-notices = "1m9cUgbABCZmgCi1EXIGLzQM8AWSDSiOL"
-sdac = "1wn3UowCtPPEDLahsMFDscF4lq0j9rc9b"
-forecasts = "14HJ3JQ4RWkV4fsRZLUb26KMgNZWSoNPO"
-weather = "19SSulH-HYmIzlxh9y0svr0wl6ugxpbmR"
-locations = "1HdQFkIK80KYHsr_XsuHAAuEsZvOyOg7G"
-model = "1bXzXgDiL0p9OWH8XEYpgFaq0_0ChrT94"
-walk_forward = "19nDsPmyqDhK0VpNuh1Iw9bUC7LTWCQTe"
-inspector_history = "1CsfoipMO8iHLgVkE-6dajCC0R5WDRFpb"
-# the 11:00 model's files, into models/issue_11; empty until uploaded
-model_11 = ""
-walk_forward_11 = ""
-inspector_history_11 = ""
+bundle = "1FPY188GbegnAYqMD_In2gqA31cM0LTxa"
