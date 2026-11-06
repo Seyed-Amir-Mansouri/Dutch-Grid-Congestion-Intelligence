@@ -227,6 +227,8 @@ def model(request):
         ("Day flag threshold", f"{config.model.day_threshold}"),
         ("Risky window from", f"{config.model.window_threshold} per quarter-hour"),
         ("Inspector veto below", f"{config.inspector.veto_cut:.0%} confidence"),
+        ("Never vetoed from", f"{config.inspector.keep_above} predictor chance"),
+        ("Inspector trained on chances from", f"{config.inspector.learn_from}"),
         ("Inspector learns from", f"{config.inspector.start_date:%b %Y}"),
         ("Validation window", f"{config.validation.window_days} days"),
     ]

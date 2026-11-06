@@ -46,6 +46,10 @@ random_state = 42
 [inspector]
 start_date = "2024-09-01"
 veto_cut = 0.5
+# flags with a predictor chance at or above this are kept whatever the inspector says
+keep_above = 0.45
+# the inspector also learns from past area-days with a predictor chance from this, below the day threshold
+learn_from = 0.15
 
 [validation]
 window_days = 14

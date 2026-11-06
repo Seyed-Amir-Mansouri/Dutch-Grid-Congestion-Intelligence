@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+from dateutil.easter import easter as dateutil_easter
 
 from . import schemas
 from .config import Config
@@ -77,6 +78,10 @@ SCHOOL_FEATURES = ["school_holiday", "school_regions_on", "days_since_school_hol
 SCHOOL_REGIONS = ["noord", "midden", "zuid"]
 FEATURE_COLUMNS += CLOCK_FEATURES + SCHOOL_FEATURES
 
+# requests on the earlier days of the same type, working day or off day (weekend or public holiday)
+DAYTYPE_FEATURES = ["last_same_type", "last2_same_type", "same_type_streak", "same_type_rate_28", "weekend_share_182", "is_off_day"]
+FEATURE_COLUMNS += DAYTYPE_FEATURES
+
 
 def weather_features(weather: pd.DataFrame) -> pd.DataFrame:
     """Turn hourly cell forecasts into quarter-hour features with changes against the previous days."""
@@ -144,6 +149,59 @@ def school_features(holidays: pd.DataFrame, days: pd.DatetimeIndex) -> pd.DataFr
     first = pd.Timestamp(f"{holidays['school_year'].min()[:4]}-08-01")
     out.loc[(out["delivery_date"] < first) | (out["delivery_date"] > holidays["end"].max()), SCHOOL_FEATURES] = np.nan
     return out
+
+
+def public_holidays(years) -> pd.DatetimeIndex:
+    """Dutch public holidays: New Year, Easter, King's Day, Liberation Day in lustrum years, Ascension, Whitsun, Christmas."""
+    days = []
+    for year in years:
+        easter = pd.Timestamp(dateutil_easter(year))
+        king = pd.Timestamp(year, 4, 27)
+        king -= pd.Timedelta(days=int(king.weekday() == 6))
+        days += [pd.Timestamp(year, 1, 1), easter, king, pd.Timestamp(year, 12, 25), pd.Timestamp(year, 12, 26)]
+        days += [easter + pd.Timedelta(days=d) for d in (1, 39, 49, 50)]
+        if year % 5 == 0:
+            days.append(pd.Timestamp(year, 5, 5))
+    return pd.DatetimeIndex(days)
+
+
+def daytype_features(events: pd.DataFrame, issue_hour: int, days: pd.DatetimeIndex) -> pd.DataFrame:
+    """Per area and day, requests on the earlier days of the same type, as known at the issue time on D-1.
+
+    All requests of D-2 and before are known; of D-1 only those announced before the issue time.
+    """
+    first = events.assign(delivery_date=events["start_time"].dt.normalize()).groupby(["delivery_date", "area"])["announced_at"].min()
+    first = first.reset_index()
+    areas = sorted(first["area"].unique())
+    span = pd.date_range(days.min() - pd.Timedelta(days=200), days.max())
+    first = first[first["delivery_date"].isin(span)]
+    row = pd.Series(np.arange(len(span)), index=span)[first["delivery_date"]].to_numpy()
+    col = pd.Series(np.arange(len(areas)), index=areas)[first["area"]].to_numpy()
+    full = np.zeros((len(span), len(areas)), np.float32)
+    early = np.zeros_like(full)
+    full[row, col] = 1
+    ok = (first["announced_at"] < first["delivery_date"] + pd.Timedelta(hours=issue_hour)).to_numpy()
+    early[row[ok], col[ok]] = 1
+    off = (span.dayofweek >= 5) | span.isin(public_holidays(range(span.year.min(), span.year.max() + 1)))
+    out = []
+    for k in np.flatnonzero(span >= days.min()):
+        known = full[:k].copy()
+        known[k - 1] = early[k - 1]
+        same = np.flatnonzero(off[:k] == off[k])
+        streak, alive = np.zeros(len(areas), np.float32), np.ones(len(areas), bool)
+        for j in same[::-1][:10]:
+            alive &= known[j] > 0
+            streak += alive
+        past = known[k - 182:k]
+        asked = past.sum(axis=0)
+        out.append(pd.DataFrame({
+            "delivery_date": span[k], "area": areas,
+            "last_same_type": known[same[-1]], "last2_same_type": known[same[-2]], "same_type_streak": streak,
+            "same_type_rate_28": known[same[same >= k - 28]].mean(axis=0),
+            "weekend_share_182": np.where(asked > 0, past[off[k - 182:k]].sum(axis=0) / np.maximum(asked, 1), np.nan),
+            "is_off_day": float(off[k]),
+        }))
+    return pd.concat(out, ignore_index=True)
 
 
 def area_table(locations: pd.DataFrame, events: pd.DataFrame) -> pd.DataFrame:
@@ -337,6 +395,7 @@ def build_dataset(
         frame["school_region"] = frame["area"].map(regions)
         frame = frame.merge(school_features(holidays, days), on=["delivery_date", "school_region"], how="left")
         frame = frame.drop(columns="school_region")
+    frame = frame.merge(daytype_features(events, settings.issue_hour, days), on=["delivery_date", "area"], how="left")
     frame = frame.sort_values(schemas.KEY).reset_index(drop=True)
 
     labelled = label_grid(frame[schemas.KEY], events)

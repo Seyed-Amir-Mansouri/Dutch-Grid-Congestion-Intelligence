@@ -56,6 +56,8 @@ class Labels:
 class Inspector:
     start_date: pd.Timestamp
     veto_cut: float
+    keep_above: float = 1.0
+    learn_from: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -103,7 +105,8 @@ def load_config(path: str | Path = DEFAULT_CONFIG) -> Config:
         inspector=Inspector(
             start_date=pd.Timestamp(raw["inspector"]["start_date"]),
             veto_cut=float(raw["inspector"]["veto_cut"]),
-        ),
+            keep_above=float(raw["inspector"].get("keep_above", 1.0)),
+            learn_from=float(raw["inspector"].get("learn_from", 1.0)),        ),
         validation=Validation(**raw["validation"]),
         drive={name: link for name, link in raw.get("drive", {}).items() if link},
     )

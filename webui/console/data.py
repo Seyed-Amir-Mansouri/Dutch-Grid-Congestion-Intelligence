@@ -187,10 +187,16 @@ def feature_groups(columns: list[str]) -> list[tuple[str, list[str]]]:
     history = ("yesterday", "week", "month", "days", "active", "hist")
 
     def group(column: str) -> str:
+        if column in ("weekday", "month", "is_weekend", "price_hist_mean"):
+            return "Market, calendar and location"
         if column in features.WEATHER_FEATURES:
             return "Weather per grid cell"
         if column in features.NOTICE_FEATURES:
             return "Transport-restriction notices"
+        if column in features.DAYTYPE_FEATURES:
+            return "Requests on the same day type"
+        if column in features.CLOCK_FEATURES + features.SCHOOL_FEATURES:
+            return "Clock change and school holidays"
         if column.endswith(suffixes):
             return "Request history by direction"
         if column in features.DIRECTION_HISTORY or any(word in column for word in history):

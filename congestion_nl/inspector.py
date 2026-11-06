@@ -133,7 +133,9 @@ def fit(config: Config, past: pd.DataFrame, dataset: pd.DataFrame, threshold: fl
         return None
     table = inputs(past, dataset, threshold)
     columns = ["peak"] + [c for c in table.columns if c not in schemas.AREA_KEY]
-    rows = past[(past["peak"] >= threshold) & past["target"].notna()].merge(table, on=schemas.AREA_KEY, how="left")
+    # it also learns from near-flags just under the day threshold
+    learn_from = min(threshold, config.inspector.learn_from)
+    rows = past[(past["peak"] >= learn_from) & past["target"].notna()].merge(table, on=schemas.AREA_KEY, how="left")
     if len(rows) < MIN_FLAGS or rows["target"].nunique() < 2:
         return None
     return {
@@ -159,5 +161,6 @@ def judge(config: Config, bundle: dict, dataset: pd.DataFrame, days: pd.DataFram
     rows = rows.merge(table, on=schemas.AREA_KEY, how="left").reindex(columns=schemas.AREA_KEY + veto["columns"])
     confidence = veto["model"].predict_proba(rows[veto["columns"]])[:, 1]
     days.loc[flagged, "inspector_confidence"] = confidence
-    days.loc[flagged, "shown"] = (confidence >= veto["cut"]).astype(int)
+    strong = rows["peak"].to_numpy() >= config.inspector.keep_above
+    days.loc[flagged, "shown"] = ((confidence >= veto["cut"]) | strong).astype(int)
     return days
