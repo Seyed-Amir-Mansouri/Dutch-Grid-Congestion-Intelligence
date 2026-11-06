@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import tomllib
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import pandas as pd
@@ -45,6 +45,8 @@ class Features:
     price_lag_days: int
     issue_hour: int
     active_days: int
+    issue_hours: tuple[int, ...] = ()
+    market_hour: int = 0
 
 
 @dataclass(frozen=True)
@@ -83,6 +85,20 @@ class Config:
         """Return an absolute path relative to the project root."""
         return path if path.is_absolute() else self.root / path
 
+    @property
+    def hours(self) -> tuple[int, ...]:
+        """The issue hours a forecast can be made at, the configured one first."""
+        return tuple(dict.fromkeys((self.features.issue_hour, *self.features.issue_hours)))
+
+    def at_hour(self, hour: int | None) -> Config:
+        """This config for a forecast issued at another hour, with its own model folder."""
+        if hour is None or hour == self.features.issue_hour:
+            return self
+        if hour not in self.hours:
+            raise ValueError(f"issue hour {hour} is not in issue_hours {list(self.hours)}")
+        return replace(self, features=replace(self.features, issue_hour=hour),
+                       paths=replace(self.paths, model_dir=self.paths.model_dir / f"issue_{hour}"))
+
 
 def load_config(path: str | Path = DEFAULT_CONFIG) -> Config:
     """Parse a TOML config file into a Config object."""
@@ -99,14 +115,15 @@ def load_config(path: str | Path = DEFAULT_CONFIG) -> Config:
             start_date=pd.Timestamp(grid["start_date"]),
             directions=tuple(grid["directions"]),
         ),
-        features=Features(**raw["features"]),
+        features=Features(**{**raw["features"], "issue_hours": tuple(raw["features"].get("issue_hours", ()))}),
         labels=Labels(**raw["labels"]),
         model=Settings(**raw["model"]),
         inspector=Inspector(
             start_date=pd.Timestamp(raw["inspector"]["start_date"]),
             veto_cut=float(raw["inspector"]["veto_cut"]),
             keep_above=float(raw["inspector"].get("keep_above", 1.0)),
-            learn_from=float(raw["inspector"].get("learn_from", 1.0)),        ),
+            learn_from=float(raw["inspector"].get("learn_from", 1.0)),
+        ),
         validation=Validation(**raw["validation"]),
         drive={name: link for name, link in raw.get("drive", {}).items() if link},
     )

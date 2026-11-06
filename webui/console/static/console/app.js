@@ -227,3 +227,11 @@
   setInterval(draw, 1000);
   refresh();
 })();
+
+// The note under an issue-hour choice: after or before the day-ahead market results.
+document.addEventListener("change", (event) => {
+  const pick = event.target.closest("select.hour-pick");
+  if (!pick) return;
+  const note = pick.parentElement.querySelector(".field-note");
+  if (note) note.textContent = pick.selectedOptions[0].dataset.note;
+});

@@ -5,8 +5,9 @@
 {% block lede %}The test in 14-day windows: each day forecast as if live, with the predictor and inspector retrained on what was known two days before it.{% endblock %}
 
 {% block content %}
+{% for t in tests %}{% with rolling=t.rolling %}
 <section class="panel">
-  <header class="panel-head"><h2>Actual vs flagged</h2>
+  <header class="panel-head"><h2>Issued {{ t.text }} on D−1 <small class="muted">{{ t.note }}</small></h2>
     <span class="muted">{% if rolling %}{{ rolling.start|date:"j M" }}–{{ rolling.end|date:"j M Y" }} · {{ rolling.count }} days · run {{ rolling.made|date:"j M, H:i" }}{% endif %}</span></header>
   {% if rolling %}
   <div class="table-scroll"><table class="table">
@@ -21,6 +22,7 @@
       {% if rolling.total %}{% with r=rolling.total total=True %}{% include "console/_test_row.html" %}{% endwith %}{% endif %}
     </tbody>
   </table></div>
-  {% else %}<p class="muted pad">Not run yet. Start <b>Run test</b> on the Operations page.</p>{% endif %}
+  {% else %}<p class="muted pad">Not run yet. Start <b>Run test</b> on the Operations page with Issued at {{ t.text }}.</p>{% endif %}
 </section>
+{% endwith %}{% endfor %}
 {% endblock %}

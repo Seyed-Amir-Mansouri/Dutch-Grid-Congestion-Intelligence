@@ -114,8 +114,22 @@ def cmd_fetch_drive(args: argparse.Namespace) -> None:
     if unknown:
         print(f"No Drive link for: {', '.join(unknown)}", file=sys.stderr)
         sys.exit(1)
-    for name in args.names or list(config.drive):
+    # with a bundle link, the single files are not downloaded as well
+    default = [drive_source.BUNDLE] if drive_source.BUNDLE in config.drive else list(config.drive)
+    for name in args.names or default:
         path = drive_source.target(config, name)
+        if name == drive_source.BUNDLE:
+            if args.missing and all(p.exists() for p in drive_source.bundle_names(config).values()):
+                print("bundle: every file is there (kept)")
+                continue
+            size = drive_source.download(config.drive[name], path)
+            print(f"bundle: {size / 2**20:.1f} MB downloaded", flush=True)
+            try:
+                placed = drive_source.unpack(config, path)
+            finally:
+                path.unlink(missing_ok=True)
+            print(f"bundle: {placed} files placed")
+            continue
         if args.missing and path.exists():
             print(f"{name}: {path} (kept)")
             continue
@@ -151,7 +165,7 @@ def cmd_locate(args: argparse.Namespace) -> None:
 
 def cmd_train(args: argparse.Namespace) -> None:
     """Build the dataset from history and save a trained model."""
-    config = load_config(args.config)
+    config = load_config(args.config).at_hour(args.issue_hour)
     inputs = pipeline.load_inputs(config)
     dataset = pipeline.build(config, inputs, pipeline.label_cutoff(config, inputs.events))
     bundle, report = pipeline.train(config, dataset)
@@ -164,7 +178,7 @@ def cmd_rolling_test(args: argparse.Namespace) -> None:
     """Forecast a window of settled days as if live, retraining each day, and save the result for the web UI."""
     from . import inspector
 
-    config = load_config(args.config)
+    config = load_config(args.config).at_hour(args.issue_hour)
     inputs = pipeline.load_inputs(config)
     dataset = pipeline.build(config, inputs, pipeline.label_cutoff(config, inputs.events))
     result = pipeline.rolling_test(config, dataset, _timestamp(args.start), _timestamp(args.end))
@@ -186,7 +200,7 @@ def cmd_rolling_test(args: argparse.Namespace) -> None:
 
 def cmd_predict(args: argparse.Namespace) -> None:
     """Issue risk predictions for one delivery day and log them."""
-    config = load_config(args.config)
+    config = load_config(args.config).at_hour(args.issue_hour)
     bundle = estimator.load(config.resolve(config.paths.model_dir))
     inputs = pipeline.load_inputs(config)
     # settled labels are needed for the inspector's track record of the predictor
@@ -267,16 +281,19 @@ def build_parser() -> argparse.ArgumentParser:
     locate.set_defaults(func=cmd_locate)
 
     train = sub.add_parser("train", help="train and save the risk model")
+    train.add_argument("--issue-hour", type=int, help="hour on D-1 the model forecasts at, one of issue_hours")
     train.set_defaults(func=cmd_train)
 
     rolling = sub.add_parser("rolling-test", help="forecast settled days as if live, retraining each day")
     rolling.add_argument("--start", required=True, help="first day YYYY-MM-DD")
     rolling.add_argument("--end", required=True, help="last day YYYY-MM-DD, included")
+    rolling.add_argument("--issue-hour", type=int, help="hour on D-1 the forecasts are issued at, one of issue_hours")
     rolling.set_defaults(func=cmd_rolling_test)
 
     predict = sub.add_parser("predict", help="issue predictions for a delivery day")
     predict.add_argument("--date", help="delivery date YYYY-MM-DD, default tomorrow")
     predict.add_argument("--issued-at", help="ISO timestamp recorded as issue time")
+    predict.add_argument("--issue-hour", type=int, help="hour on D-1 the forecast is issued at, one of issue_hours")
     predict.set_defaults(func=cmd_predict)
 
     check = sub.add_parser("validate", help="score predictions against GOPACS events")

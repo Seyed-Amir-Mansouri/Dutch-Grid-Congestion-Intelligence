@@ -8,6 +8,8 @@ from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_POST
 
+from congestion_nl import features
+
 from . import charts, data, jobs
 
 ASSETS = Path(__file__).parent / "static" / "console"
@@ -198,7 +200,8 @@ def activity(request):
 def performance(request):
     """The test in 14-day windows: area-days and requests, actual against the flags the inspector kept."""
     context = _common(request, "performance")
-    context.update(threshold=context["threshold"] or data.CONFIG.model.day_threshold, rolling=data.rolling_test())
+    tests = [{**h, "rolling": data.rolling_test(h["value"])} for h in data.hours()]
+    context.update(threshold=context["threshold"] or data.CONFIG.model.day_threshold, tests=tests)
     return render(request, "console/performance.html", context)
 
 
@@ -222,7 +225,8 @@ def model(request):
         ("History starts", f"{config.grid.start_date:%d %b %Y}"),
         ("Grid cell size", f"{config.grid.cell_degrees}°"),
         ("Directions", ", ".join(config.grid.directions)),
-        ("Forecast issued at", f"{config.features.issue_hour}:00 the day before"),
+        ("Forecast issued at", ", ".join(f"{h['text']} ({h['note']})" for h in data.hours()) + " the day before"),
+        ("Left out before the day-ahead results", ", ".join(features.MARKET_INPUTS)),
         ("Area active if a request in the last", f"{config.features.active_days} days"),
         ("Day flag threshold", f"{config.model.day_threshold}"),
         ("Risky window from", f"{config.model.window_threshold} per quarter-hour"),

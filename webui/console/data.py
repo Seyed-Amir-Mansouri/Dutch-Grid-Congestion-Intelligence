@@ -18,9 +18,20 @@ def path(name: str) -> Path:
     return CONFIG.resolve(getattr(CONFIG.paths, name))
 
 
-def model_dir() -> Path:
-    """Return the folder of the saved model."""
-    return path("model_dir")
+def model_dir(hour: int | None = None) -> Path:
+    """Return the folder of the saved model for an issue hour, the configured one by default."""
+    config = CONFIG.at_hour(hour)
+    return config.resolve(config.paths.model_dir)
+
+
+def hour_label(hour: int) -> str:
+    """Whether a forecast at this hour is made after or before the day-ahead market results."""
+    return "After Day-Ahead" if hour >= CONFIG.features.market_hour else "Before Day-Ahead"
+
+
+def hours() -> list[dict]:
+    """The issue hours with their labels, the configured one first."""
+    return [{"value": h, "text": f"{h:02d}:00", "note": hour_label(h)} for h in CONFIG.hours]
 
 
 def _cached(name: str, files: list[Path], build):
@@ -71,10 +82,10 @@ def label_end() -> pd.Timestamp | None:
     return pipeline.label_cutoff(CONFIG, found) if len(found) else None
 
 
-def bundle() -> dict | None:
-    """The saved model, or None if it has not been trained."""
-    file = model_dir() / estimator.MODEL_FILE
-    return _cached("bundle", [file], lambda: estimator.load(model_dir()) if file.exists() else None)
+def bundle(hour: int | None = None) -> dict | None:
+    """The saved model of an issue hour, or None if it has not been trained."""
+    file = model_dir(hour) / estimator.MODEL_FILE
+    return _cached(f"bundle{hour}", [file], lambda: estimator.load(model_dir(hour)) if file.exists() else None)
 
 
 def area_ledger() -> pd.DataFrame | None:
@@ -114,9 +125,9 @@ def forecast(day: pd.Timestamp) -> pd.DataFrame:
     return rows.sort_values("peak_probability", ascending=False).reset_index(drop=True)
 
 
-def rolling_test() -> dict | None:
-    """The test as on the results page, per 14-day window: area-days and requests, actual against the kept flags."""
-    file = model_dir() / inspector.TEST_FILE
+def rolling_test(hour: int | None = None) -> dict | None:
+    """The test of an issue hour per 14-day window: area-days and requests, actual against the kept flags."""
+    file = model_dir(hour) / inspector.TEST_FILE
     if not file.exists():
         return None
     scores = pd.read_csv(file, parse_dates=["delivery_date"])
@@ -220,17 +231,19 @@ FILE_GROUPS = [
     ("Data", [("gopacs", "GOPACS requests", "Update GOPACS"), ("notices", "Restriction notices", "Update GOPACS"),
               ("weather", "Weather forecasts", "Update weather"), ("sdac", "Day-ahead market", "Update market data"),
               ("forecasts", "System forecasts", "Update market data"), ("locations", "Area locations", "Locate areas")]),
-    ("Model", [("model", "Trained model", "Retrain model"), ("walk_forward", "Test (14-day windows)", "Run test")]),
+    ("Model", [(f"{name}{suffix}", f"{label}{when}", maker) for suffix, when in
+               [("", "")] + [(f"_{h}", f", {h:02d}:00") for h in CONFIG.hours[1:]]
+               for name, label, maker in (("model", "Trained model", "Retrain model"), ("walk_forward", "Test (14-day windows)", "Run test"))]),
     ("Outputs", [("predictions", "Quarter-hour forecasts", "Issue forecast"),
                  ("area_predictions", "Area forecasts ledger", "Issue forecast"), ("validation", "Validation history", "Validate")]),
 ]
 
 
 def file_path(key: str) -> Path:
-    """The path of a listed file, including the two model files that are not in the config."""
-    special = {"model": model_dir() / estimator.MODEL_FILE, "walk_forward": model_dir() / inspector.TEST_FILE,
-               "inspector_history": model_dir() / inspector.HISTORY_FILE}
-    return special.get(key) or path(key)
+    """The path of a listed file, including the model files that are not in the config, such as model_11."""
+    from congestion_nl import drive_source
+
+    return drive_source.target(CONFIG, key)
 
 
 def file_status() -> list[dict]:

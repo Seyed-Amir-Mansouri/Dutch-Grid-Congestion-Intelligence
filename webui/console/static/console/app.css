@@ -121,7 +121,7 @@ code, .mono { font-family: var(--mono); font-size: 12.5px; }
   background-image: linear-gradient(45deg, transparent 50%, #fff 50%), linear-gradient(135deg, #fff 50%, transparent 50%);
   background-position: calc(100% - 18px) 16px, calc(100% - 13px) 16px; background-size: 5px 5px; background-repeat: no-repeat; }
 .daypick select option { color: var(--ink); }
-input[type=date] { height: 36px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--radius); font: 13px var(--mono); color: var(--ink); background: #fafbfc; }
+input[type=date], select.hour-pick { height: 36px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--radius); font: 13px var(--mono); color: var(--ink); background: #fafbfc; }
 input[type=date]:focus, select:focus, .btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
 
 /* tables */
@@ -182,7 +182,7 @@ input[type=date]:focus, select:focus, .btn:focus-visible { outline: 2px solid va
 .step-model { border-top-color: var(--navy); }
 .step-lead { grid-column: span 2; background: var(--navy); color: #fff; border-color: var(--navy); border-top-color: var(--red); }
 .step.step-lead p { color: #c3cad9; }
-.step-lead input[type=date] { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.25); color: #fff; color-scheme: dark; }
+.step-lead input[type=date], .step-lead select.hour-pick { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.25); color: #fff; color-scheme: dark; }
 .step-kind { font: 500 10.5px var(--cond); text-transform: uppercase; letter-spacing: 1.8px; color: var(--muted); }
 .step-lead .step-kind { color: #ff8a84; }
 .step h3 { font-size: 18px; text-transform: uppercase; }
@@ -190,6 +190,7 @@ input[type=date]:focus, select:focus, .btn:focus-visible { outline: 2px solid va
 .fields { display: flex; gap: 10px; flex-wrap: wrap; }
 .fields label { display: grid; gap: 4px; font: 500 10.5px var(--cond); text-transform: uppercase; letter-spacing: 1.2px; color: var(--muted); }
 .step-lead .fields label { color: #aab3c7; }
+.field-note { font: 400 11px var(--sans, inherit); text-transform: none; letter-spacing: 0; color: var(--muted); }
 .step .btn { align-self: flex-start; }
 .step-warn { list-style: none; margin: 0; padding: 8px 10px; display: grid; gap: 3px; font-size: 12px; color: #7a4f0e;
   background: #fdf3e2; border-left: 3px solid var(--amber); border-radius: var(--radius); }

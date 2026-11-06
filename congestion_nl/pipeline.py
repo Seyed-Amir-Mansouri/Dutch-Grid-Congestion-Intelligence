@@ -8,7 +8,7 @@ import pandas as pd
 
 from . import estimator, ingest, inspector, schemas
 from .config import Config
-from .features import FEATURE_COLUMNS, area_table, build_dataset
+from .features import area_table, build_dataset, feature_columns
 
 
 @dataclass(frozen=True)
@@ -79,9 +79,9 @@ def build(config: Config, inputs: Inputs, label_end: pd.Timestamp | None) -> pd.
 
 def train(config: Config, dataset: pd.DataFrame) -> tuple[dict, dict]:
     """Train the classifier on the labelled rows of a dataset, then the inspector that vetoes its flags."""
-    bundle, report = estimator.train(dataset, FEATURE_COLUMNS, config.model)
+    bundle, report = estimator.train(dataset, feature_columns(config), config.model)
     cache = config.resolve(config.paths.model_dir) / inspector.HISTORY_FILE
-    past = inspector.walk_forward(config, dataset, FEATURE_COLUMNS, cache)
+    past = inspector.walk_forward(config, dataset, feature_columns(config), cache)
     bundle["inspector"] = inspector.fit(config, past, dataset, bundle["day_threshold"])
     veto = bundle["inspector"]
     report["inspector"] = (
@@ -95,14 +95,14 @@ def rolling_test(config: Config, dataset: pd.DataFrame, start: pd.Timestamp, end
     labelled = dataset[dataset["target"].notna()]
     threshold, window = config.model.day_threshold, config.model.window_threshold
     cache = config.resolve(config.paths.model_dir) / inspector.HISTORY_FILE
-    past = inspector.walk_forward(config, dataset, FEATURE_COLUMNS, cache)
+    past = inspector.walk_forward(config, dataset, feature_columns(config), cache)
     parts = []
     for day in pd.date_range(start, end):
         rows = labelled[labelled["delivery_date"] == day]
         if rows.empty:
             continue
         cutoff = day - pd.Timedelta(days=estimator.LABEL_GAP_DAYS)
-        bundle = estimator.fit_bundle(labelled[labelled["delivery_date"] <= cutoff], FEATURE_COLUMNS, config.model)
+        bundle = estimator.fit_bundle(labelled[labelled["delivery_date"] <= cutoff], feature_columns(config), config.model)
         known = past.assign(target=past["target"].where(past["delivery_date"] <= cutoff))
         bundle["inspector"] = inspector.fit(config, known, dataset, threshold)
         scored = rows.assign(risk_probability=estimator.predict(bundle, rows))

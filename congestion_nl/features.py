@@ -82,6 +82,19 @@ FEATURE_COLUMNS += CLOCK_FEATURES + SCHOOL_FEATURES
 DAYTYPE_FEATURES = ["last_same_type", "last2_same_type", "same_type_streak", "same_type_rate_28", "weekend_share_182", "is_off_day"]
 FEATURE_COLUMNS += DAYTYPE_FEATURES
 
+# published with or after the day-ahead market, so not known to a forecast issued before config.features.market_hour
+MARKET_INPUTS = ["price_eur_mwh", "net_position_mw", "wind_forecast_mw", "solar_forecast_mw", "residual_load_mw"]
+
+
+def before_market(config: Config) -> bool:
+    """Whether a forecast at the configured issue hour is made before the day-ahead results are out."""
+    return config.features.issue_hour < config.features.market_hour
+
+
+def feature_columns(config: Config) -> list[str]:
+    """The model inputs known at the configured issue hour."""
+    return [c for c in FEATURE_COLUMNS if c not in MARKET_INPUTS] if before_market(config) else list(FEATURE_COLUMNS)
+
 
 def weather_features(weather: pd.DataFrame) -> pd.DataFrame:
     """Turn hourly cell forecasts into quarter-hour features with changes against the previous days."""
@@ -356,7 +369,13 @@ def build_dataset(
     """Join inputs and build features for active areas, with the target set for dates up to label_end."""
     settings = config.features
 
-    market = sdac.merge(forecasts, on=schemas.MARKET_KEY, how="inner")
+    early = before_market(config)
+    market = sdac.merge(forecasts, on=schemas.MARKET_KEY, how="outer" if early else "inner")
+    if early:
+        # before the day-ahead results the delivery day has no market rows yet: its quarter-hours come from the weather
+        later = pd.date_range(market["delivery_date"].max() + pd.Timedelta(days=1), weather["time"].max().normalize())
+        grid = pd.MultiIndex.from_product([later, range(96)], names=schemas.MARKET_KEY).to_frame(index=False)
+        market = pd.concat([market, grid], ignore_index=True)
     market = market[market["delivery_date"] >= config.grid.start_date]
     market = market.sort_values(schemas.MARKET_KEY).reset_index(drop=True)
     market["residual_load_mw"] = (
@@ -406,4 +425,6 @@ def build_dataset(
         frame["target"] = frame["congested"].where(frame["delivery_date"] <= label_end)
     numeric = [column for column in FEATURE_COLUMNS if frame[column].dtype.kind == "f"]
     frame[numeric] = frame[numeric].astype("float32")
-    return frame.drop(columns=["congested"])
+    frame = frame.drop(columns=["congested"])
+    # dropped, not left empty, so the inspector's day summaries leave them out too
+    return frame.drop(columns=MARKET_INPUTS) if before_market(config) else frame

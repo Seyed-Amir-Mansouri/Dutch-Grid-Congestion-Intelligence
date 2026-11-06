@@ -26,7 +26,7 @@ STAGES = {
 # short stage names for the files a Drive download replaces
 DRIVE_STAGES = {"gopacs": "Requests", "notices": "Notices", "sdac": "Market", "forecasts": "Forecasts",
                 "weather": "Weather", "locations": "Locations", "model": "Model", "inspector_history": "Inspector",
-                "walk_forward": "Test"}
+                "walk_forward": "Test", "bundle": "All files"}
 PROGRESS = re.compile(r"progress: (\d+)%")
 # files the steps read: a label and the step that makes the file, or None for reference files
 FILES = {
@@ -82,10 +82,11 @@ def steps() -> list[dict]:
     # the last settled day: requests of later days are not complete yet
     settled = data.label_end()
     test_end = settled.date() if settled is not None else today - timedelta(days=2)
+    hour = {"name": "hour", "label": "Issued at", "type": "select", "options": data.hours()}
     found = [
         {"key": "daily", "title": "Daily forecast run", "kind": "chain", "lead": True,
          "text": "Refresh GOPACS, weather and market data, then issue tomorrow's forecast with the inspector's verdict.",
-         "fields": [{"name": "date", "label": "Delivery day", "type": "date", "value": tomorrow}]},
+         "fields": [{"name": "date", "label": "Delivery day", "type": "date", "value": tomorrow}, hour]},
         {"key": "gopacs", "title": "Update GOPACS", "kind": "data",
          "text": "Download congestion requests and transport-restriction notices from GOPACS.", "fields": []},
         {"key": "weather", "title": "Update weather", "kind": "data",
@@ -100,10 +101,10 @@ def steps() -> list[dict]:
         {"key": "locate", "title": "Locate areas", "kind": "model",
          "text": "Place every GOPACS area on the map and assign its grid cell.", "fields": []},
         {"key": "train", "title": "Retrain model", "kind": "model",
-         "text": "Train the predictor and the inspector on all settled history. Takes about half an hour.", "fields": []},
+         "text": "Train the predictor and the inspector on all settled history. Takes about half an hour.", "fields": [hour]},
         {"key": "predict", "title": "Issue forecast", "kind": "model",
          "text": "Score every active area for one delivery day and log it in the forecast ledger.",
-         "fields": [{"name": "date", "label": "Delivery day", "type": "date", "value": tomorrow}]},
+         "fields": [{"name": "date", "label": "Delivery day", "type": "date", "value": tomorrow}, hour]},
         {"key": "validate", "title": "Validate", "kind": "model",
          "text": "Score settled forecasts against GOPACS requests and append to the validation history.",
          "fields": [{"name": "as_of", "label": "As of", "type": "date", "value": today}]},
@@ -111,7 +112,7 @@ def steps() -> list[dict]:
          "text": "Forecast settled days as if live: retrain the predictor and inspector for each day on what was known "
                  "two days before, then score against GOPACS in 14-day windows. Three windows take about an hour.",
          "fields": [{"name": "start", "label": "From", "type": "date", "value": test_end - timedelta(days=41)},
-                    {"name": "end", "label": "To", "type": "date", "value": test_end}]},
+                    {"name": "end", "label": "To", "type": "date", "value": test_end}, hour]},
     ]
     for step in found:
         step["missing"] = missing(step["key"])
@@ -161,22 +162,28 @@ def drive_ready() -> bool:
 def commands(key: str, form: dict) -> list[list[str]]:
     """The command lines for a step, from the submitted form."""
     day = lambda name: datetime.strptime(form[name], "%Y-%m-%d").strftime("%Y-%m-%d")
+    # the issue hour as a checked number, for the steps that ask for it
+    at = lambda: ["--issue-hour", str(int(form["hour"]))] if form.get("hour") else []
     single = {
         "gopacs": lambda: [["fetch-gopacs"]],
         "weather": lambda: [["fetch-weather", "--start", day("start"), "--end", day("end")]],
         "entsoe": lambda: [["fetch-entsoe", "--start", day("start"), "--end", day("end")]],
         "locate": lambda: [["locate"]],
-        "train": lambda: [["train"]],
-        "predict": lambda: [["predict", "--date", day("date")]],
+        "train": lambda: [["train", *at()]],
+        "predict": lambda: [["predict", "--date", day("date"), *at()]],
         "validate": lambda: [["validate", "--as-of", day("as_of")]],
-        "rolling": lambda: [["rolling-test", "--start", day("start"), "--end", day("end")]],
+        "rolling": lambda: [["rolling-test", "--start", day("start"), "--end", day("end"), *at()]],
     }
     if key in single:
         return single[key]()
     if key == "drive":
         from . import data
 
-        return [["fetch-drive", name] for name in data.CONFIG.drive]
+        from congestion_nl import drive_source
+
+        # with a bundle link, the single files are not downloaded as well
+        names = [drive_source.BUNDLE] if drive_source.BUNDLE in data.CONFIG.drive else list(data.CONFIG.drive)
+        return [["fetch-drive", name] for name in names]
     if key == "daily":
         from . import data
 
@@ -185,7 +192,7 @@ def commands(key: str, form: dict) -> list[list[str]]:
                  ["fetch-weather", "--start", data.weather_start(target, 3), "--end", str(target)]]
         if entsoe_key_set():
             chain.append(["fetch-entsoe", "--start", data.market_start(target), "--end", str(target + timedelta(days=1))])
-        return chain + [["predict", "--date", str(target)]]
+        return chain + [["predict", "--date", str(target), *at()]]
     raise KeyError(key)
 
 
@@ -322,7 +329,7 @@ def clear(with_model: bool) -> int:
     files = [data.file_path(key) for group, names in data.FILE_GROUPS if group in groups for key, _, _ in names]
     if with_model:
         # not listed in the Files panel, but made by training like the model
-        files.append(data.file_path("inspector_history"))
+        files += [data.file_path(f"inspector_history{'' if i == 0 else f'_{h}'}") for i, h in enumerate(data.CONFIG.hours)]
     if settings.RUNS_DIR.exists():
         files += [file for kind in ("*.json", "*.tmp", "*.log") for file in settings.RUNS_DIR.glob(kind)]
     with _lock:
@@ -407,7 +414,10 @@ def stages(meta: dict) -> list[dict]:
             from . import data
 
             file = name.split()[1]
-            label, detail, icon = DRIVE_STAGES.get(file, file), data.file_path(file).name, "Download"
+            # model files carry their issue hour, such as model_11
+            base, _, hour = file.rpartition("_")
+            label = f"{DRIVE_STAGES[base]} {hour}:00" if hour.isdigit() and base in DRIVE_STAGES else DRIVE_STAGES.get(file, file)
+            detail, icon = data.file_path(file).name, "Download"
         record = timing[i] if i < len(timing) else None
         ended_early = meta["status"] in ("failed", "stopped")
         if record and record.get("stopped"):
