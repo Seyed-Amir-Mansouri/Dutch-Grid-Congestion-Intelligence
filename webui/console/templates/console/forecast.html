@@ -3,7 +3,7 @@
 {% block title %}Forecast{% endblock %}
 {% block eyebrow %}Day-ahead congestion forecast{% endblock %}
 {% block heading %}{% if day %}{{ day|date:"l j F Y" }}{% else %}No forecast yet{% endif %}{% endblock %}
-{% block lede %}{% if day %}Issued {{ issued|date:"j M Y, H:i" }} · flags at peak probability ≥ {{ threshold }}, checked by the inspector before they are shown.{% else %}Run the daily forecast from Operations to issue the first one.{% endif %}{% endblock %}
+{% block lede %}{% if day %}Issued {{ issued|date:"j M Y, H:i" }}{% if with_forecaster %} with the forecaster{% endif %} · flags at peak probability ≥ {{ threshold }}, checked by the inspector before they are shown.{% else %}Run the daily forecast from Operations to issue the first one.{% endif %}{% endblock %}
 {% block hero_side %}{% if days %}
 <div class="daypick">
   {% if previous %}<a class="btn btn-ghost" href="?day={{ previous|date:'Y-m-d' }}" aria-label="Previous day">‹</a>{% else %}<span class="btn btn-ghost off">‹</span>{% endif %}

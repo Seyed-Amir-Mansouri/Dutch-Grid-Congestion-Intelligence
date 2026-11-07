@@ -91,9 +91,14 @@ def before_market(config: Config) -> bool:
     return config.features.issue_hour < config.features.market_hour
 
 
+def without_market(config: Config) -> bool:
+    """Whether the market inputs are left out: before the day-ahead results, unless the forecaster fills them in."""
+    return before_market(config) and not config.features.forecast_market
+
+
 def feature_columns(config: Config) -> list[str]:
     """The model inputs known at the configured issue hour."""
-    return [c for c in FEATURE_COLUMNS if c not in MARKET_INPUTS] if before_market(config) else list(FEATURE_COLUMNS)
+    return [c for c in FEATURE_COLUMNS if c not in MARKET_INPUTS] if without_market(config) else list(FEATURE_COLUMNS)
 
 
 def weather_features(weather: pd.DataFrame) -> pd.DataFrame:
@@ -427,4 +432,4 @@ def build_dataset(
     frame[numeric] = frame[numeric].astype("float32")
     frame = frame.drop(columns=["congested"])
     # dropped, not left empty, so the inspector's day summaries leave them out too
-    return frame.drop(columns=MARKET_INPUTS) if before_market(config) else frame
+    return frame.drop(columns=MARKET_INPUTS) if without_market(config) else frame

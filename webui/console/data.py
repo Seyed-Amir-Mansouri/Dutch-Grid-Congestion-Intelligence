@@ -31,7 +31,8 @@ def hour_label(hour: int) -> str:
 
 def hours() -> list[dict]:
     """The issue hours with their labels, the configured one first."""
-    return [{"value": h, "text": f"{h:02d}:00", "note": hour_label(h)} for h in CONFIG.hours]
+    return [{"value": h, "text": f"{h:02d}:00", "note": hour_label(h), "early": h < CONFIG.features.market_hour}
+            for h in CONFIG.hours]
 
 
 def _cached(name: str, files: list[Path], build):

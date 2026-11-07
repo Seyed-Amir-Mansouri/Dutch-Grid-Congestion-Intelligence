@@ -80,7 +80,7 @@ def build(config: Config, inputs: Inputs, label_end: pd.Timestamp | None) -> pd.
 def train(config: Config, dataset: pd.DataFrame) -> tuple[dict, dict]:
     """Train the classifier on the labelled rows of a dataset, then the inspector that vetoes its flags."""
     bundle, report = estimator.train(dataset, feature_columns(config), config.model)
-    cache = config.resolve(config.paths.model_dir) / inspector.HISTORY_FILE
+    cache = inspector.history_path(config)
     past = inspector.walk_forward(config, dataset, feature_columns(config), cache)
     bundle["inspector"] = inspector.fit(config, past, dataset, bundle["day_threshold"])
     veto = bundle["inspector"]
@@ -94,7 +94,7 @@ def rolling_test(config: Config, dataset: pd.DataFrame, start: pd.Timestamp, end
     """Forecast each settled day from start to end with a predictor and inspector trained only on labels up to D-2."""
     labelled = dataset[dataset["target"].notna()]
     threshold, window = config.model.day_threshold, config.model.window_threshold
-    cache = config.resolve(config.paths.model_dir) / inspector.HISTORY_FILE
+    cache = inspector.history_path(config)
     past = inspector.walk_forward(config, dataset, feature_columns(config), cache)
     parts = []
     for day in pd.date_range(start, end):

@@ -66,6 +66,7 @@ def forecast(request):
         previous=days[days.index(day) + 1] if days.index(day) + 1 < len(days) else None,
         next=days[days.index(day) - 1] if days.index(day) > 0 else None,
         issued=pd.Timestamp(rows["issued_at"].max()).tz_convert("Europe/Amsterdam") if len(rows) else None,
+        with_forecaster=bool(len(rows)) and str(rows.loc[rows["issued_at"].idxmax(), "model_version"]).endswith("+forecaster"),
         active=len(rows),
         alerts=int(counts.get("alert", 0)),
         vetoed=int(counts.get("vetoed", 0)),

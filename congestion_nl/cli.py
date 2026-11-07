@@ -200,7 +200,7 @@ def cmd_rolling_test(args: argparse.Namespace) -> None:
 
 def cmd_predict(args: argparse.Namespace) -> None:
     """Issue risk predictions for one delivery day and log them."""
-    config = load_config(args.config).at_hour(args.issue_hour)
+    config = load_config(args.config).at_hour(args.issue_hour, args.forecaster)
     bundle = estimator.load(config.resolve(config.paths.model_dir))
     inputs = pipeline.load_inputs(config)
     # settled labels are needed for the inspector's track record of the predictor
@@ -210,6 +210,16 @@ def cmd_predict(args: argparse.Namespace) -> None:
         day = _timestamp(args.date)
     else:
         day = _today() + pd.Timedelta(days=1)
+    if args.forecaster:
+        from . import forecaster
+
+        found = forecaster.forecast(inputs.sdac, inputs.forecasts, inputs.weather, day)
+        dataset = forecaster.fill(dataset, found, day)
+        bundle = {**bundle, "model_version": bundle["model_version"] + "+forecaster"}
+        peak = found.loc[found["price_eur_mwh"].idxmax()]
+        print(f"forecaster: price {found['price_eur_mwh'].mean():.0f} EUR/MWh on average, highest "
+              f"{peak['price_eur_mwh']:.0f} at quarter {int(peak['quarter'])}; wind up to {found['wind_forecast_mw'].max():.0f} MW, "
+              f"solar up to {found['solar_forecast_mw'].max():.0f} MW")
     issued_at = datetime.fromisoformat(args.issued_at) if args.issued_at else None
     predictions = pipeline.predict_day(config, bundle, dataset, day, issued_at)
 
@@ -294,6 +304,8 @@ def build_parser() -> argparse.ArgumentParser:
     predict.add_argument("--date", help="delivery date YYYY-MM-DD, default tomorrow")
     predict.add_argument("--issued-at", help="ISO timestamp recorded as issue time")
     predict.add_argument("--issue-hour", type=int, help="hour on D-1 the forecast is issued at, one of issue_hours")
+    predict.add_argument("--forecaster", action="store_true",
+                         help="before the day-ahead results: use the main model with the market inputs forecast")
     predict.set_defaults(func=cmd_predict)
 
     check = sub.add_parser("validate", help="score predictions against GOPACS events")

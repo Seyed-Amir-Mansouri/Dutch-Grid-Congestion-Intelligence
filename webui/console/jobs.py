@@ -83,10 +83,13 @@ def steps() -> list[dict]:
     settled = data.label_end()
     test_end = settled.date() if settled is not None else today - timedelta(days=2)
     hour = {"name": "hour", "label": "Issued at", "type": "select", "options": data.hours()}
+    # offered only for an issue hour before the day-ahead results
+    use = {"name": "forecaster", "label": "Use the forecaster", "type": "check",
+           "note": f"{data.CONFIG.features.issue_hour:02d}:00 model, with the day-ahead price, net position, wind and solar forecast"}
     found = [
         {"key": "daily", "title": "Daily forecast run", "kind": "chain", "lead": True,
          "text": "Refresh GOPACS, weather and market data, then issue tomorrow's forecast with the inspector's verdict.",
-         "fields": [{"name": "date", "label": "Delivery day", "type": "date", "value": tomorrow}, hour]},
+         "fields": [{"name": "date", "label": "Delivery day", "type": "date", "value": tomorrow}, hour, use]},
         {"key": "gopacs", "title": "Update GOPACS", "kind": "data",
          "text": "Download congestion requests and transport-restriction notices from GOPACS.", "fields": []},
         {"key": "weather", "title": "Update weather", "kind": "data",
@@ -104,7 +107,7 @@ def steps() -> list[dict]:
          "text": "Train the predictor and the inspector on all settled history. Takes about half an hour.", "fields": [hour]},
         {"key": "predict", "title": "Issue forecast", "kind": "model",
          "text": "Score every active area for one delivery day and log it in the forecast ledger.",
-         "fields": [{"name": "date", "label": "Delivery day", "type": "date", "value": tomorrow}, hour]},
+         "fields": [{"name": "date", "label": "Delivery day", "type": "date", "value": tomorrow}, hour, use]},
         {"key": "validate", "title": "Validate", "kind": "model",
          "text": "Score settled forecasts against GOPACS requests and append to the validation history.",
          "fields": [{"name": "as_of", "label": "As of", "type": "date", "value": today}]},
@@ -164,13 +167,16 @@ def commands(key: str, form: dict) -> list[list[str]]:
     day = lambda name: datetime.strptime(form[name], "%Y-%m-%d").strftime("%Y-%m-%d")
     # the issue hour as a checked number, for the steps that ask for it
     at = lambda: ["--issue-hour", str(int(form["hour"]))] if form.get("hour") else []
+    # the forecaster only applies before the day-ahead results
+    early = lambda: form.get("forecaster") and form.get("hour") and int(form["hour"]) < _market_hour()
+    use = lambda: [*at(), "--forecaster"] if early() else at()
     single = {
         "gopacs": lambda: [["fetch-gopacs"]],
         "weather": lambda: [["fetch-weather", "--start", day("start"), "--end", day("end")]],
         "entsoe": lambda: [["fetch-entsoe", "--start", day("start"), "--end", day("end")]],
         "locate": lambda: [["locate"]],
         "train": lambda: [["train", *at()]],
-        "predict": lambda: [["predict", "--date", day("date"), *at()]],
+        "predict": lambda: [["predict", "--date", day("date"), *use()]],
         "validate": lambda: [["validate", "--as-of", day("as_of")]],
         "rolling": lambda: [["rolling-test", "--start", day("start"), "--end", day("end"), *at()]],
     }
@@ -192,8 +198,14 @@ def commands(key: str, form: dict) -> list[list[str]]:
                  ["fetch-weather", "--start", data.weather_start(target, 3), "--end", str(target)]]
         if entsoe_key_set():
             chain.append(["fetch-entsoe", "--start", data.market_start(target), "--end", str(target + timedelta(days=1))])
-        return chain + [["predict", "--date", str(target), *at()]]
+        return chain + [["predict", "--date", str(target), *use()]]
     raise KeyError(key)
+
+
+def _market_hour() -> int:
+    from . import data
+
+    return data.CONFIG.features.market_hour
 
 
 def _meta_path(job_id: str):

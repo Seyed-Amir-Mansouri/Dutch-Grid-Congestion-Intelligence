@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import shutil
 from pathlib import Path
 
 import numpy as np
@@ -13,6 +14,8 @@ from .features import NOTICE_FEATURES, WEATHER_DAY
 
 # monthly out-of-sample predictor scores the inspector learns from
 HISTORY_FILE = "inspector_history.csv"
+# the scores for forecasts made with the forecaster, a copy of the main model's so those stay as trained
+FORECASTER_HISTORY = "inspector_history_forecaster.csv"
 # the 14-day test: each day forecast by a predictor and inspector retrained on what was known two days before
 TEST_FILE = "walk_forward.csv"
 WINDOWS = (7, 30, 90)
@@ -39,6 +42,16 @@ def _features_key(features: list[str]) -> str:
     return hashlib.sha1(",".join(features).encode()).hexdigest()[:12]
 
 
+def history_path(config: Config) -> Path:
+    """The cached predictor scores of this config; with the forecaster, a fresh copy of the main model's."""
+    folder = config.resolve(config.paths.model_dir)
+    if not config.features.forecast_market:
+        return folder / HISTORY_FILE
+    if (folder / HISTORY_FILE).exists():
+        shutil.copyfile(folder / HISTORY_FILE, folder / FORECASTER_HISTORY)
+    return folder / FORECASTER_HISTORY
+
+
 def walk_forward(config: Config, dataset: pd.DataFrame, features: list[str], cache: Path) -> pd.DataFrame:
     """Score every area-day from the inspector start with a predictor trained up to two days before its month."""
     key = _features_key(features)
@@ -49,10 +62,13 @@ def walk_forward(config: Config, dataset: pd.DataFrame, features: list[str], cac
     labelled = dataset[dataset["target"].notna()]
     start = max(config.inspector.start_date, dataset["delivery_date"].min()).to_period("M").to_timestamp()
     parts = []
-    for month in pd.date_range(start, dataset["delivery_date"].max(), freq="MS"):
+    months = pd.date_range(start, dataset["delivery_date"].max(), freq="MS")
+    for month in months:
         rows = dataset[(dataset["delivery_date"] >= month) & (dataset["delivery_date"] <= month + pd.offsets.MonthEnd(0))]
         old = cached[cached["month"] == month] if len(cached) else cached
-        if len(old) and len(old) == len(rows[schemas.AREA_KEY].drop_duplicates()):
+        # with the forecaster the main model's scores are kept as trained; only the last month is scored anew
+        kept = config.features.forecast_market and month != months[-1]
+        if len(old) and (kept or len(old) == len(rows[schemas.AREA_KEY].drop_duplicates())):
             parts.append(old)
             continue
         known = labelled[labelled["delivery_date"] <= month - pd.Timedelta(days=estimator.LABEL_GAP_DAYS)]
@@ -154,7 +170,7 @@ def judge(config: Config, bundle: dict, dataset: pd.DataFrame, days: pd.DataFram
     flagged = days["day_flag"] == 1
     if veto is None or not flagged.any():
         return days
-    cache = config.resolve(config.paths.model_dir) / HISTORY_FILE
+    cache = history_path(config)
     past = walk_forward(config, dataset, bundle["features"], cache)
     table = inputs(past, dataset, bundle["day_threshold"])
     rows = days.loc[flagged, schemas.AREA_KEY + ["peak_probability"]].rename(columns={"peak_probability": "peak"})

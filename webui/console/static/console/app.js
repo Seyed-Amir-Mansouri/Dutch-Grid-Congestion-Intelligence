@@ -234,4 +234,10 @@ document.addEventListener("change", (event) => {
   if (!pick) return;
   const note = pick.parentElement.querySelector(".field-note");
   if (note) note.textContent = pick.selectedOptions[0].dataset.note;
+  // the forecaster tick is only offered before the day-ahead results, and cleared when hidden
+  const check = pick.closest("form").querySelector(".check-pick");
+  if (check) {
+    check.hidden = !("early" in pick.selectedOptions[0].dataset);
+    if (check.hidden) check.querySelector("input").checked = false;
+  }
 });
