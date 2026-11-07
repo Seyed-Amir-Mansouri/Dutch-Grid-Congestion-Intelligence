@@ -85,11 +85,45 @@ def forecast(sdac: pd.DataFrame, forecasts: pd.DataFrame, weather: pd.DataFrame,
     return out
 
 
-def fill(dataset: pd.DataFrame, found: pd.DataFrame, day: pd.Timestamp) -> pd.DataFrame:
-    """The dataset with day's market inputs replaced by the forecast, and the residual load worked out from them."""
-    dataset = dataset.copy()
-    rows = (dataset["delivery_date"] == day).to_numpy()
-    values = dataset.loc[rows, ["quarter"]].merge(found, on="quarter", how="left")
+def run(config, days, sdac: pd.DataFrame, forecasts: pd.DataFrame, weather: pd.DataFrame, report=print) -> pd.DataFrame:
+    """Forecast each day and save it, replacing earlier forecasts of the same days."""
+    found = []
+    for day in days:
+        found.append(forecast(sdac, forecasts, weather, day))
+        report(f"{day:%Y-%m-%d}: price {found[-1]['price_eur_mwh'].mean():.0f} EUR/MWh on average, wind up to "
+               f"{found[-1]['wind_forecast_mw'].max():.0f} MW, solar up to {found[-1]['solar_forecast_mw'].max():.0f} MW",
+               flush=True)
+    found = pd.concat(found, ignore_index=True)
+    path = config.resolve(config.paths.market_forecasts)
+    old = saved(config)
+    old = old[~old["delivery_date"].isin(found["delivery_date"])]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    pd.concat([old, found], ignore_index=True).sort_values(schemas.MARKET_KEY).to_csv(path, index=False)
+    return found
+
+
+def saved(config) -> pd.DataFrame:
+    """The forecasts saved so far."""
+    path = config.resolve(config.paths.market_forecasts)
+    if not path.exists():
+        return pd.DataFrame(columns=schemas.MARKET_KEY + TARGETS)
+    return pd.read_csv(path, parse_dates=["delivery_date"])
+
+
+def for_days(config, days, sdac: pd.DataFrame, forecasts: pd.DataFrame, weather: pd.DataFrame) -> pd.DataFrame:
+    """The saved forecasts of these days; days not saved yet are forecast now."""
+    found = saved(config)
+    found = found[found["delivery_date"].isin(days)]
+    missing = [day for day in days if day not in set(found["delivery_date"])]
+    if missing:
+        found = pd.concat([found, run(config, missing, sdac, forecasts, weather)], ignore_index=True)
+    return found
+
+
+def fill(dataset: pd.DataFrame, found: pd.DataFrame) -> pd.DataFrame:
+    """The dataset, changed in place, with the market inputs of the forecast days replaced and the residual load redone."""
+    rows = dataset["delivery_date"].isin(found["delivery_date"]).to_numpy()
+    values = dataset.loc[rows, schemas.MARKET_KEY].merge(found, on=schemas.MARKET_KEY, how="left")
     for target in TARGETS:
         dataset.loc[rows, target] = values[target].to_numpy(np.float32)
     dataset.loc[rows, "residual_load_mw"] = (dataset.loc[rows, "load_forecast_mw"] - dataset.loc[rows, "wind_forecast_mw"]

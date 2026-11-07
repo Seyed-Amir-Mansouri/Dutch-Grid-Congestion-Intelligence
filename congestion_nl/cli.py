@@ -174,15 +174,42 @@ def cmd_train(args: argparse.Namespace) -> None:
     print(f"saved: {path}")
 
 
+def cmd_forecast_market(args: argparse.Namespace) -> None:
+    """Forecast the day-ahead price, net position, wind and solar of each day, from what was known before its results."""
+    from . import forecaster, ingest
+
+    config = load_config(args.config)
+    paths = config.paths
+    sdac = ingest.load_sdac(config.resolve(paths.sdac))
+    forecasts = ingest.load_forecasts(config.resolve(paths.forecasts))
+    weather = ingest.load_weather(config.resolve(paths.weather))
+    days = pd.date_range(_timestamp(args.start), _timestamp(args.end or args.start))
+    forecaster.run(config, days, sdac, forecasts, weather)
+    print(f"saved: {config.resolve(paths.market_forecasts)}")
+
+
 def cmd_rolling_test(args: argparse.Namespace) -> None:
     """Forecast a window of settled days as if live, retraining each day, and save the result for the web UI."""
     from . import inspector
 
-    config = load_config(args.config).at_hour(args.issue_hour)
+    config = load_config(args.config).at_hour(args.issue_hour, args.forecaster)
     inputs = pipeline.load_inputs(config)
-    dataset = pipeline.build(config, inputs, pipeline.label_cutoff(config, inputs.events))
-    result = pipeline.rolling_test(config, dataset, _timestamp(args.start), _timestamp(args.end))
-    path = config.resolve(config.paths.model_dir) / inspector.TEST_FILE
+    cutoff = pipeline.label_cutoff(config, inputs.events)
+    start, end = _timestamp(args.start), _timestamp(args.end)
+    dataset = pipeline.build(config, inputs, cutoff)
+    if args.forecaster:
+        from . import forecaster
+
+        # the days as known at the issue hour, with the market inputs forecast; the main model is trained as usual
+        test = dataset[dataset["delivery_date"].between(start, end)].copy()
+        del dataset
+        days = list(pd.date_range(start, end))
+        forecaster.fill(test, forecaster.for_days(config, days, inputs.sdac, inputs.forecasts, inputs.weather))
+        main = load_config(args.config)
+        result = pipeline.rolling_test(main, pipeline.build(main, inputs, cutoff), start, end, test)
+    else:
+        result = pipeline.rolling_test(config, dataset, start, end)
+    path = inspector.test_path(config)
     path.parent.mkdir(parents=True, exist_ok=True)
     result.to_csv(path, index=False)
 
@@ -213,13 +240,8 @@ def cmd_predict(args: argparse.Namespace) -> None:
     if args.forecaster:
         from . import forecaster
 
-        found = forecaster.forecast(inputs.sdac, inputs.forecasts, inputs.weather, day)
-        dataset = forecaster.fill(dataset, found, day)
+        forecaster.fill(dataset, forecaster.for_days(config, [day], inputs.sdac, inputs.forecasts, inputs.weather))
         bundle = {**bundle, "model_version": bundle["model_version"] + "+forecaster"}
-        peak = found.loc[found["price_eur_mwh"].idxmax()]
-        print(f"forecaster: price {found['price_eur_mwh'].mean():.0f} EUR/MWh on average, highest "
-              f"{peak['price_eur_mwh']:.0f} at quarter {int(peak['quarter'])}; wind up to {found['wind_forecast_mw'].max():.0f} MW, "
-              f"solar up to {found['solar_forecast_mw'].max():.0f} MW")
     issued_at = datetime.fromisoformat(args.issued_at) if args.issued_at else None
     predictions = pipeline.predict_day(config, bundle, dataset, day, issued_at)
 
@@ -298,7 +320,14 @@ def build_parser() -> argparse.ArgumentParser:
     rolling.add_argument("--start", required=True, help="first day YYYY-MM-DD")
     rolling.add_argument("--end", required=True, help="last day YYYY-MM-DD, included")
     rolling.add_argument("--issue-hour", type=int, help="hour on D-1 the forecasts are issued at, one of issue_hours")
+    rolling.add_argument("--forecaster", action="store_true",
+                         help="before the day-ahead results: the main model with the market inputs forecast")
     rolling.set_defaults(func=cmd_rolling_test)
+
+    market = sub.add_parser("forecast-market", help="forecast the day-ahead results and wind and solar of delivery days")
+    market.add_argument("--start", required=True, help="first day YYYY-MM-DD")
+    market.add_argument("--end", help="last day YYYY-MM-DD, included; default the first")
+    market.set_defaults(func=cmd_forecast_market)
 
     predict = sub.add_parser("predict", help="issue predictions for a delivery day")
     predict.add_argument("--date", help="delivery date YYYY-MM-DD, default tomorrow")

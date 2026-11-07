@@ -202,6 +202,10 @@ def performance(request):
     """The test in 14-day windows: area-days and requests, actual against the flags the inspector kept."""
     context = _common(request, "performance")
     tests = [{**h, "rolling": data.rolling_test(h["value"])} for h in data.hours()]
+    # before the day-ahead results, also the main model with the forecaster
+    main = f"{data.CONFIG.features.issue_hour:02d}:00"
+    tests += [{**h, "forecaster": True, "note": f"{h['note']} · {main} model with the forecaster",
+               "rolling": data.rolling_test(h["value"], forecaster=True)} for h in data.hours() if h["early"]]
     context.update(threshold=context["threshold"] or data.CONFIG.model.day_threshold, tests=tests)
     return render(request, "console/performance.html", context)
 

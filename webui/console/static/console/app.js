@@ -81,6 +81,7 @@
     GOPACS: '<path d="M4 18h16M7 18V9l5-4 5 4v9M10 18v-4h4v4"/>',
     Weather: '<circle cx="9" cy="9" r="3.5"/><path d="M9 2.5v1.5M2.5 9H4M4.4 4.4l1 1M13.6 4.4l-1 1M8 20h9a3.5 3.5 0 0 0 0-7 5 5 0 0 0-9.6 1.6A2.7 2.7 0 0 0 8 20z"/>',
     Market: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+    Forecaster: '<path d="M3 19h18M4 15l4-4 3 2 4-5"/><path d="M15 8l5-3" stroke-dasharray="1.5 2.2"/><circle cx="20" cy="5" r="1.2"/>',
     Locate: '<path d="M12 21s-6-5.6-6-11a6 6 0 0 1 12 0c0 5.4-6 11-6 11z"/><circle cx="12" cy="10" r="2.2"/>',
     Train: '<rect x="6" y="6" width="12" height="12" rx="1.5"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/>',
     Forecast: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1" fill="currentColor"/>',

@@ -22,7 +22,7 @@
       {% if rolling.total %}{% with r=rolling.total total=True %}{% include "console/_test_row.html" %}{% endwith %}{% endif %}
     </tbody>
   </table></div>
-  {% else %}<p class="muted pad">Not run yet. Start <b>Run test</b> on the Operations page with Issued at {{ t.text }}.</p>{% endif %}
+  {% else %}<p class="muted pad">Not run yet. Start <b>Run test</b> on the Operations page with Issued at {{ t.text }}{% if t.forecaster %} and Use the forecaster ticked{% endif %}.</p>{% endif %}
 </section>
 {% endwith %}{% endfor %}
 {% endblock %}

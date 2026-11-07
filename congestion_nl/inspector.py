@@ -18,6 +18,8 @@ HISTORY_FILE = "inspector_history.csv"
 FORECASTER_HISTORY = "inspector_history_forecaster.csv"
 # the 14-day test: each day forecast by a predictor and inspector retrained on what was known two days before
 TEST_FILE = "walk_forward.csv"
+# the same with the forecaster, kept with the model of its issue hour
+FORECASTER_TEST = "walk_forward_forecaster.csv"
 WINDOWS = (7, 30, 90)
 MIN_FLAGS = 50
 # area-day inputs from the predictor's dataset: values that are the same for every quarter of the day
@@ -50,6 +52,14 @@ def history_path(config: Config) -> Path:
     if (folder / HISTORY_FILE).exists():
         shutil.copyfile(folder / HISTORY_FILE, folder / FORECASTER_HISTORY)
     return folder / FORECASTER_HISTORY
+
+
+def test_path(config: Config) -> Path:
+    """Where the 14-day test of this config is saved."""
+    folder = config.resolve(config.paths.model_dir)
+    if config.features.forecast_market:
+        return folder / f"issue_{config.features.issue_hour}" / FORECASTER_TEST
+    return folder / TEST_FILE
 
 
 def walk_forward(config: Config, dataset: pd.DataFrame, features: list[str], cache: Path) -> pd.DataFrame:
@@ -163,15 +173,18 @@ def fit(config: Config, past: pd.DataFrame, dataset: pd.DataFrame, threshold: fl
     }
 
 
-def judge(config: Config, bundle: dict, dataset: pd.DataFrame, days: pd.DataFrame) -> pd.DataFrame:
-    """Add the inspector's chance that each flag is correct, and whether the flag is shown after the veto."""
+def judge(config: Config, bundle: dict, dataset: pd.DataFrame, days: pd.DataFrame, past: pd.DataFrame | None = None) -> pd.DataFrame:
+    """Add the inspector's chance that each flag is correct, and whether the flag is shown after the veto.
+
+    The past scores are worked out from the dataset unless given.
+    """
     days = days.assign(inspector_confidence=np.nan, shown=days["day_flag"])
     veto = bundle.get("inspector")
     flagged = days["day_flag"] == 1
     if veto is None or not flagged.any():
         return days
-    cache = history_path(config)
-    past = walk_forward(config, dataset, bundle["features"], cache)
+    if past is None:
+        past = walk_forward(config, dataset, bundle["features"], history_path(config))
     table = inputs(past, dataset, bundle["day_threshold"])
     rows = days.loc[flagged, schemas.AREA_KEY + ["peak_probability"]].rename(columns={"peak_probability": "peak"})
     rows = rows.merge(table, on=schemas.AREA_KEY, how="left").reindex(columns=schemas.AREA_KEY + veto["columns"])

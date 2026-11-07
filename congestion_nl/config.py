@@ -29,6 +29,7 @@ class Paths:
     predictions: Path
     area_predictions: Path
     validation: Path
+    market_forecasts: Path = Path("outputs/market_forecasts.csv")
 
 
 @dataclass(frozen=True)

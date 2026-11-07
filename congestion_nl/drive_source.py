@@ -13,6 +13,8 @@ CHUNK = 1 << 20
 BUNDLE = "bundle"
 DATA_FILES = ["gopacs", "notices", "sdac", "forecasts", "weather", "locations"]
 MODEL_FILES = ["model", "walk_forward", "inspector_history"]
+# the test with the forecaster, for issue hours before the day-ahead results
+FORECASTER_FILES = ["walk_forward_forecaster"]
 
 
 def file_id(link: str) -> str:
@@ -30,12 +32,13 @@ def target(config, name: str) -> Path:
 
     if name == BUNDLE:
         return config.resolve(Path("data") / "drive_bundle.zip")
-    hour = re.fullmatch(r"(model|walk_forward|inspector_history)_(\d+)", name)
+    hour = re.fullmatch(r"(model|walk_forward|walk_forward_forecaster|inspector_history)_(\d+)", name)
     if hour:
         name, config = hour.group(1), config.at_hour(int(hour.group(2)))
     model_dir = config.resolve(config.paths.model_dir)
     special = {"model": model_dir / estimator.MODEL_FILE, "walk_forward": model_dir / inspector.TEST_FILE,
-               "inspector_history": model_dir / inspector.HISTORY_FILE}
+               "inspector_history": model_dir / inspector.HISTORY_FILE,
+               "walk_forward_forecaster": model_dir / inspector.FORECASTER_TEST}
     return special.get(name) or config.resolve(getattr(config.paths, name))
 
 
@@ -69,7 +72,7 @@ def bundle_names(config) -> dict[str, Path]:
     """The file names a bundle may hold and where each goes: data files by name, model files with their hour."""
     names = {target(config, key).name: target(config, key) for key in DATA_FILES}
     for hour in config.hours:
-        for key in MODEL_FILES:
+        for key in MODEL_FILES + (FORECASTER_FILES if hour < config.features.market_hour else []):
             path = target(config, f"{key}_{hour}")
             names[f"{path.stem}_{hour}{path.suffix}"] = path
     return names

@@ -15,6 +15,7 @@ model_dir = "models"
 predictions = "outputs/predictions.csv"
 area_predictions = "outputs/area_predictions.csv"
 validation = "outputs/validation_history.csv"
+market_forecasts = "outputs/market_forecasts.csv"
 
 [grid]
 cell_degrees = 0.25

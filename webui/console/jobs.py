@@ -22,11 +22,12 @@ STAGES = {
     "predict": ("Forecast", "Score areas, apply the veto"),
     "validate": ("Validate", "Score against GOPACS"),
     "rolling-test": ("Test", "Retrain daily, score each day"),
+    "forecast-market": ("Forecaster", "Day-ahead price, wind and solar"),
 }
 # short stage names for the files a Drive download replaces
 DRIVE_STAGES = {"gopacs": "Requests", "notices": "Notices", "sdac": "Market", "forecasts": "Forecasts",
                 "weather": "Weather", "locations": "Locations", "model": "Model", "inspector_history": "Inspector",
-                "walk_forward": "Test", "bundle": "All files"}
+                "walk_forward": "Test", "walk_forward_forecaster": "Test with forecaster", "bundle": "All files"}
 PROGRESS = re.compile(r"progress: (\d+)%")
 # files the steps read: a label and the step that makes the file, or None for reference files
 FILES = {
@@ -115,7 +116,7 @@ def steps() -> list[dict]:
          "text": "Forecast settled days as if live: retrain the predictor and inspector for each day on what was known "
                  "two days before, then score against GOPACS in 14-day windows. Three windows take about an hour.",
          "fields": [{"name": "start", "label": "From", "type": "date", "value": test_end - timedelta(days=41)},
-                    {"name": "end", "label": "To", "type": "date", "value": test_end}, hour]},
+                    {"name": "end", "label": "To", "type": "date", "value": test_end}, hour, use]},
     ]
     for step in found:
         step["missing"] = missing(step["key"])
@@ -170,15 +171,18 @@ def commands(key: str, form: dict) -> list[list[str]]:
     # the forecaster only applies before the day-ahead results
     early = lambda: form.get("forecaster") and form.get("hour") and int(form["hour"]) < _market_hour()
     use = lambda: [*at(), "--forecaster"] if early() else at()
+    # with the forecaster, its own stage first
+    market = lambda first, last: [["forecast-market", "--start", first, "--end", last]] if early() else []
     single = {
         "gopacs": lambda: [["fetch-gopacs"]],
         "weather": lambda: [["fetch-weather", "--start", day("start"), "--end", day("end")]],
         "entsoe": lambda: [["fetch-entsoe", "--start", day("start"), "--end", day("end")]],
         "locate": lambda: [["locate"]],
         "train": lambda: [["train", *at()]],
-        "predict": lambda: [["predict", "--date", day("date"), *use()]],
+        "predict": lambda: [*market(day("date"), day("date")), ["predict", "--date", day("date"), *use()]],
         "validate": lambda: [["validate", "--as-of", day("as_of")]],
-        "rolling": lambda: [["rolling-test", "--start", day("start"), "--end", day("end"), *at()]],
+        "rolling": lambda: [*market(day("start"), day("end")),
+                            ["rolling-test", "--start", day("start"), "--end", day("end"), *use()]],
     }
     if key in single:
         return single[key]()
@@ -198,7 +202,7 @@ def commands(key: str, form: dict) -> list[list[str]]:
                  ["fetch-weather", "--start", data.weather_start(target, 3), "--end", str(target)]]
         if entsoe_key_set():
             chain.append(["fetch-entsoe", "--start", data.market_start(target), "--end", str(target + timedelta(days=1))])
-        return chain + [["predict", "--date", str(target), *use()]]
+        return chain + market(str(target), str(target)) + [["predict", "--date", str(target), *use()]]
     raise KeyError(key)
 
 
@@ -335,6 +339,8 @@ def clear(with_model: bool) -> int:
 
     Reference files (GeoNames, the CSC report, reference/) and the config are never touched.
     """
+    from congestion_nl import inspector
+
     from . import data
 
     groups = ["Data", "Outputs"] + (["Model"] if with_model else [])
@@ -342,6 +348,7 @@ def clear(with_model: bool) -> int:
     if with_model:
         # not listed in the Files panel, but made by training like the model
         files += [data.file_path(f"inspector_history{'' if i == 0 else f'_{h}'}") for i, h in enumerate(data.CONFIG.hours)]
+        files.append(data.model_dir() / inspector.FORECASTER_HISTORY)
     if settings.RUNS_DIR.exists():
         files += [file for kind in ("*.json", "*.tmp", "*.log") for file in settings.RUNS_DIR.glob(kind)]
     with _lock:

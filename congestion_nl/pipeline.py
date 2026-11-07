@@ -90,15 +90,21 @@ def train(config: Config, dataset: pd.DataFrame) -> tuple[dict, dict]:
     return bundle, report
 
 
-def rolling_test(config: Config, dataset: pd.DataFrame, start: pd.Timestamp, end: pd.Timestamp) -> pd.DataFrame:
-    """Forecast each settled day from start to end with a predictor and inspector trained only on labels up to D-2."""
+def rolling_test(
+    config: Config, dataset: pd.DataFrame, start: pd.Timestamp, end: pd.Timestamp, test: pd.DataFrame | None = None,
+) -> pd.DataFrame:
+    """Forecast each settled day from start to end with a predictor and inspector trained only on labels up to D-2.
+
+    With test rows, such as the days as known at an earlier hour, those are scored and judged instead.
+    """
     labelled = dataset[dataset["target"].notna()]
+    scored_rows = labelled if test is None else test[test["target"].notna()]
     threshold, window = config.model.day_threshold, config.model.window_threshold
     cache = inspector.history_path(config)
     past = inspector.walk_forward(config, dataset, feature_columns(config), cache)
     parts = []
     for day in pd.date_range(start, end):
-        rows = labelled[labelled["delivery_date"] == day]
+        rows = scored_rows[scored_rows["delivery_date"] == day]
         if rows.empty:
             continue
         cutoff = day - pd.Timedelta(days=estimator.LABEL_GAP_DAYS)
@@ -106,7 +112,8 @@ def rolling_test(config: Config, dataset: pd.DataFrame, start: pd.Timestamp, end
         known = past.assign(target=past["target"].where(past["delivery_date"] <= cutoff))
         bundle["inspector"] = inspector.fit(config, known, dataset, threshold)
         scored = rows.assign(risk_probability=estimator.predict(bundle, rows))
-        days = inspector.judge(config, bundle, dataset, estimator.area_days(scored, threshold, window))
+        flags = estimator.area_days(scored, threshold, window)
+        days = inspector.judge(config, bundle, dataset, flags) if test is None else inspector.judge(config, bundle, rows, flags, past)
         outcome = rows.groupby(schemas.AREA_KEY, as_index=False)["target"].max().rename(columns={"target": "had_request"})
         parts.append(days.merge(outcome, on=schemas.AREA_KEY, how="left").merge(_timing(scored, window), on=schemas.AREA_KEY))
         print(f"{day:%Y-%m-%d}: {int(days['day_flag'].sum())} flagged, {int(days['shown'].sum())} kept", flush=True)
