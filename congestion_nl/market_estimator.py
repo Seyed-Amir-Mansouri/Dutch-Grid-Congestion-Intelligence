@@ -1,4 +1,4 @@
-"""Forecast the day-ahead price, net position and the wind and solar forecasts of a delivery day, before they are published.
+"""Estimate the day-ahead price, net position and the wind and solar forecasts of a delivery day, before they are published.
 
 Per quarter-hour, from what is known before the day-ahead results on D-1: the national means of the weather forecast,
 the load forecast, the calendar, and each target on D-1 and D-7 with its D-1 mean. One boosted-tree regressor per
@@ -36,7 +36,7 @@ def weather_means(weather: pd.DataFrame) -> pd.DataFrame:
 
 
 def table(sdac: pd.DataFrame, forecasts: pd.DataFrame, weather: pd.DataFrame, day: pd.Timestamp) -> pd.DataFrame:
-    """Every quarter-hour up to day with the targets where known and the forecaster's inputs."""
+    """Every quarter-hour up to day with the targets where known and the market estimator's inputs."""
     t = sdac.merge(forecasts, on=schemas.MARKET_KEY, how="outer")
     t = t[t["delivery_date"] < day]
     grid = pd.DataFrame({"delivery_date": day, "quarter": range(96)})
@@ -62,7 +62,7 @@ def table(sdac: pd.DataFrame, forecasts: pd.DataFrame, weather: pd.DataFrame, da
 
 
 def inputs_for(target: str) -> list[str]:
-    """The forecaster's inputs for one target."""
+    """The market estimator's inputs for one target."""
     return CALENDAR + ["load_forecast_mw"] + WEATHER + [f"{target}_d1", f"{target}_d7", f"{target}_d1_mean"]
 
 
@@ -71,12 +71,12 @@ def _regressor() -> HistGradientBoostingRegressor:
                                          l2_regularization=1.0, random_state=42)
 
 
-def forecast(sdac: pd.DataFrame, forecasts: pd.DataFrame, weather: pd.DataFrame, day: pd.Timestamp) -> pd.DataFrame:
+def estimate(sdac: pd.DataFrame, forecasts: pd.DataFrame, weather: pd.DataFrame, day: pd.Timestamp) -> pd.DataFrame:
     """The targets for each quarter-hour of day, from regressors trained on every earlier day."""
     t = table(sdac, forecasts, weather, day)
     train, rows = t[t["delivery_date"] < day], t[t["delivery_date"] == day]
     if rows[WEATHER].isna().all().all():
-        raise ValueError(f"No weather forecast for {day:%Y-%m-%d}: the forecaster needs it")
+        raise ValueError(f"No weather forecast for {day:%Y-%m-%d}: the market estimator needs it")
     out = rows[schemas.MARKET_KEY].reset_index(drop=True)
     for target in TARGETS:
         columns = inputs_for(target)
@@ -86,15 +86,15 @@ def forecast(sdac: pd.DataFrame, forecasts: pd.DataFrame, weather: pd.DataFrame,
 
 
 def run(config, days, sdac: pd.DataFrame, forecasts: pd.DataFrame, weather: pd.DataFrame, report=print) -> pd.DataFrame:
-    """Forecast each day and save it, replacing earlier forecasts of the same days."""
+    """Estimate each day and save it, replacing earlier estimates of the same days."""
     found = []
     for day in days:
-        found.append(forecast(sdac, forecasts, weather, day))
+        found.append(estimate(sdac, forecasts, weather, day))
         report(f"{day:%Y-%m-%d}: price {found[-1]['price_eur_mwh'].mean():.0f} EUR/MWh on average, wind up to "
                f"{found[-1]['wind_forecast_mw'].max():.0f} MW, solar up to {found[-1]['solar_forecast_mw'].max():.0f} MW",
                flush=True)
     found = pd.concat(found, ignore_index=True)
-    path = config.resolve(config.paths.market_forecasts)
+    path = config.resolve(config.paths.market_estimates)
     old = saved(config)
     old = old[~old["delivery_date"].isin(found["delivery_date"])]
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -103,15 +103,15 @@ def run(config, days, sdac: pd.DataFrame, forecasts: pd.DataFrame, weather: pd.D
 
 
 def saved(config) -> pd.DataFrame:
-    """The forecasts saved so far."""
-    path = config.resolve(config.paths.market_forecasts)
+    """The estimates saved so far."""
+    path = config.resolve(config.paths.market_estimates)
     if not path.exists():
         return pd.DataFrame(columns=schemas.MARKET_KEY + TARGETS)
     return pd.read_csv(path, parse_dates=["delivery_date"])
 
 
 def for_days(config, days, sdac: pd.DataFrame, forecasts: pd.DataFrame, weather: pd.DataFrame) -> pd.DataFrame:
-    """The saved forecasts of these days; days not saved yet are forecast now."""
+    """The saved estimates of these days; days not saved yet are estimated now."""
     found = saved(config)
     found = found[found["delivery_date"].isin(days)]
     missing = [day for day in days if day not in set(found["delivery_date"])]
@@ -121,7 +121,7 @@ def for_days(config, days, sdac: pd.DataFrame, forecasts: pd.DataFrame, weather:
 
 
 def fill(dataset: pd.DataFrame, found: pd.DataFrame) -> pd.DataFrame:
-    """The dataset, changed in place, with the market inputs of the forecast days replaced and the residual load redone."""
+    """The dataset, changed in place, with the market inputs of the estimated days replaced and the residual load redone."""
     rows = dataset["delivery_date"].isin(found["delivery_date"]).to_numpy()
     values = dataset.loc[rows, schemas.MARKET_KEY].merge(found, on=schemas.MARKET_KEY, how="left")
     for target in TARGETS:

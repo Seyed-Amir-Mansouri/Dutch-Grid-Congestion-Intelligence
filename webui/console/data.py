@@ -126,9 +126,9 @@ def forecast(day: pd.Timestamp) -> pd.DataFrame:
     return rows.sort_values("peak_probability", ascending=False).reset_index(drop=True)
 
 
-def rolling_test(hour: int | None = None, forecaster: bool = False) -> dict | None:
+def rolling_test(hour: int | None = None, market_estimator: bool = False) -> dict | None:
     """The test of an issue hour per 14-day window: area-days and requests, actual against the kept flags."""
-    file = model_dir(hour) / (inspector.FORECASTER_TEST if forecaster else inspector.TEST_FILE)
+    file = model_dir(hour) / (inspector.MARKET_ESTIMATOR_TEST if market_estimator else inspector.TEST_FILE)
     if not file.exists():
         return None
     scores = pd.read_csv(file, parse_dates=["delivery_date"])
@@ -163,15 +163,15 @@ def rolling_test(hour: int | None = None, forecaster: bool = False) -> dict | No
             "made": pd.Timestamp(file.stat().st_mtime, unit="s", tz="UTC").tz_convert("Europe/Amsterdam")}
 
 
-FORECASTER_FILE = "forecaster_test.csv"
-FORECASTER_INPUTS = [("price_eur_mwh", "Day-ahead price"), ("net_position_mw", "Net position"),
+MARKET_ESTIMATOR_FILE = "market_estimator_test.csv"
+MARKET_ESTIMATOR_INPUTS = [("price_eur_mwh", "Day-ahead price"), ("net_position_mw", "Net position"),
                      ("wind_forecast_mw", "Wind forecast"), ("solar_forecast_mw", "Solar forecast"),
                      ("residual_load_mw", "Residual load")]
 
 
-def forecaster_test() -> dict | None:
-    """How closely the forecaster's day-ahead inputs follow the real ones, per 14-day window."""
-    file = model_dir() / FORECASTER_FILE
+def market_estimator_test() -> dict | None:
+    """How closely the market estimator's day-ahead inputs follow the real ones, per 14-day window."""
+    file = model_dir() / MARKET_ESTIMATOR_FILE
     if not file.exists():
         return None
     x = pd.read_csv(file, parse_dates=["delivery_date"])
@@ -182,7 +182,7 @@ def forecaster_test() -> dict | None:
 
     def block(first: pd.Timestamp, last: pd.Timestamp) -> dict:
         part = x[x["delivery_date"].between(first, last)]
-        rows = [{"label": label, "corr": part[name].corr(part[f"{name}_fc"])} for name, label in FORECASTER_INPUTS]
+        rows = [{"label": label, "corr": part[name].corr(part[f"{name}_fc"])} for name, label in MARKET_ESTIMATOR_INPUTS]
         return {"start": first, "end": last, "days": part["delivery_date"].nunique(), "rows": rows}
 
     window = pd.Timedelta(days=CONFIG.validation.window_days)
@@ -265,11 +265,11 @@ FILE_GROUPS = [
     ("Model", [(f"{name}{suffix}", f"{label}{when}", maker) for suffix, when in
                [("", "")] + [(f"_{h}", f", {h:02d}:00") for h in CONFIG.hours[1:]]
                for name, label, maker in (("model", "Trained model", "Retrain model"), ("walk_forward", "Test (14-day windows)", "Download from Drive"))]
-              + [(f"walk_forward_forecaster_{h}", f"Test (14-day windows), {h:02d}:00 with the forecaster", "Download from Drive")
+              + [(f"walk_forward_market_estimator_{h}", f"Test (14-day windows), {h:02d}:00 with the market estimator", "Download from Drive")
                  for h in CONFIG.hours if h < CONFIG.features.market_hour]),
     ("Outputs", [("predictions", "Quarter-hour forecasts", "Issue forecast"),
                  ("area_predictions", "Area forecasts ledger", "Issue forecast"), ("validation", "Validation history", "Validate"),
-                 ("market_forecasts", "Forecaster's day-ahead values", "Issue forecast with the forecaster")]),
+                 ("market_estimates", "Market estimator's day-ahead values", "Issue forecast with the market estimator")]),
 ]
 
 

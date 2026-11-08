@@ -29,7 +29,7 @@ class Paths:
     predictions: Path
     area_predictions: Path
     validation: Path
-    market_forecasts: Path = Path("outputs/market_forecasts.csv")
+    market_estimates: Path = Path("outputs/market_estimates.csv")
 
 
 @dataclass(frozen=True)
@@ -49,7 +49,7 @@ class Features:
     issue_hours: tuple[int, ...] = ()
     market_hour: int = 0
     # before the day-ahead results, the main model with the market inputs forecast for the delivery day
-    forecast_market: bool = False
+    estimate_market: bool = False
 
 
 @dataclass(frozen=True)
@@ -93,17 +93,17 @@ class Config:
         """The issue hours a forecast can be made at, the configured one first."""
         return tuple(dict.fromkeys((self.features.issue_hour, *self.features.issue_hours)))
 
-    def at_hour(self, hour: int | None, forecaster: bool = False) -> Config:
+    def at_hour(self, hour: int | None, market_estimator: bool = False) -> Config:
         """This config for a forecast issued at another hour, with its own model folder.
 
-        With the forecaster, an hour before the day-ahead results keeps the main model and its folder.
+        With the market estimator, an hour before the day-ahead results keeps the main model and its folder.
         """
-        if forecaster:
+        if market_estimator:
             if hour not in self.hours or hour >= self.features.market_hour:
-                raise ValueError(f"the forecaster is for issue hours before {self.features.market_hour}:00")
+                raise ValueError(f"the market estimator is for issue hours before {self.features.market_hour}:00")
             if self.features.issue_hour < self.features.market_hour:
-                raise ValueError("the forecaster needs a main model issued after the day-ahead results")
-            return replace(self, features=replace(self.features, issue_hour=hour, forecast_market=True))
+                raise ValueError("the market estimator needs a main model issued after the day-ahead results")
+            return replace(self, features=replace(self.features, issue_hour=hour, estimate_market=True))
         if hour is None or hour == self.features.issue_hour:
             return self
         if hour not in self.hours:

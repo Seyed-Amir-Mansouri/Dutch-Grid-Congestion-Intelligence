@@ -14,12 +14,12 @@ from .features import NOTICE_FEATURES, WEATHER_DAY
 
 # monthly out-of-sample predictor scores the inspector learns from
 HISTORY_FILE = "inspector_history.csv"
-# the scores for forecasts made with the forecaster, a copy of the main model's so those stay as trained
-FORECASTER_HISTORY = "inspector_history_forecaster.csv"
+# the scores for forecasts made with the market estimator, a copy of the main model's so those stay as trained
+MARKET_ESTIMATOR_HISTORY = "inspector_history_market_estimator.csv"
 # the 14-day test: each day forecast by a predictor and inspector retrained on what was known two days before
 TEST_FILE = "walk_forward.csv"
-# the same with the forecaster, kept with the model of its issue hour
-FORECASTER_TEST = "walk_forward_forecaster.csv"
+# the same with the market estimator, kept with the model of its issue hour
+MARKET_ESTIMATOR_TEST = "walk_forward_market_estimator.csv"
 WINDOWS = (7, 30, 90)
 MIN_FLAGS = 50
 # area-day inputs from the predictor's dataset: values that are the same for every quarter of the day
@@ -45,20 +45,20 @@ def _features_key(features: list[str]) -> str:
 
 
 def history_path(config: Config) -> Path:
-    """The cached predictor scores of this config; with the forecaster, a fresh copy of the main model's."""
+    """The cached predictor scores of this config; with the market estimator, a fresh copy of the main model's."""
     folder = config.resolve(config.paths.model_dir)
-    if not config.features.forecast_market:
+    if not config.features.estimate_market:
         return folder / HISTORY_FILE
     if (folder / HISTORY_FILE).exists():
-        shutil.copyfile(folder / HISTORY_FILE, folder / FORECASTER_HISTORY)
-    return folder / FORECASTER_HISTORY
+        shutil.copyfile(folder / HISTORY_FILE, folder / MARKET_ESTIMATOR_HISTORY)
+    return folder / MARKET_ESTIMATOR_HISTORY
 
 
 def test_path(config: Config) -> Path:
     """Where the 14-day test of this config is saved."""
     folder = config.resolve(config.paths.model_dir)
-    if config.features.forecast_market:
-        return folder / f"issue_{config.features.issue_hour}" / FORECASTER_TEST
+    if config.features.estimate_market:
+        return folder / f"issue_{config.features.issue_hour}" / MARKET_ESTIMATOR_TEST
     return folder / TEST_FILE
 
 
@@ -76,8 +76,8 @@ def walk_forward(config: Config, dataset: pd.DataFrame, features: list[str], cac
     for month in months:
         rows = dataset[(dataset["delivery_date"] >= month) & (dataset["delivery_date"] <= month + pd.offsets.MonthEnd(0))]
         old = cached[cached["month"] == month] if len(cached) else cached
-        # with the forecaster the main model's scores are kept as trained; only the last month is scored anew
-        kept = config.features.forecast_market and month != months[-1]
+        # with the market estimator the main model's scores are kept as trained; only the last month is scored anew
+        kept = config.features.estimate_market and month != months[-1]
         if len(old) and (kept or len(old) == len(rows[schemas.AREA_KEY].drop_duplicates())):
             parts.append(old)
             continue

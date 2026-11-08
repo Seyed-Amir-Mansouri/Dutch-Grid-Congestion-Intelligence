@@ -92,8 +92,8 @@ def before_market(config: Config) -> bool:
 
 
 def without_market(config: Config) -> bool:
-    """Whether the market inputs are left out: before the day-ahead results, unless the forecaster fills them in."""
-    return before_market(config) and not config.features.forecast_market
+    """Whether the market inputs are left out: before the day-ahead results, unless the market estimator fills them in."""
+    return before_market(config) and not config.features.estimate_market
 
 
 def feature_columns(config: Config) -> list[str]:

@@ -21,12 +21,12 @@ STAGES = {
     "train": ("Train", "Predictor and inspector"),
     "predict": ("Forecast", "Score areas, apply the veto"),
     "validate": ("Validate", "Score against GOPACS"),
-    "forecast-market": ("Forecaster", "Day-ahead price, wind and solar"),
+    "estimate-market": ("Market estimator", "Day-ahead price, wind and solar"),
 }
 # short stage names for the files a Drive download replaces
 DRIVE_STAGES = {"gopacs": "Requests", "notices": "Notices", "sdac": "Market", "forecasts": "Forecasts",
                 "weather": "Weather", "locations": "Locations", "model": "Model", "inspector_history": "Inspector",
-                "walk_forward": "Test", "walk_forward_forecaster": "Test with forecaster", "bundle": "All files"}
+                "walk_forward": "Test", "walk_forward_market_estimator": "Test with market estimator", "bundle": "All files"}
 PROGRESS = re.compile(r"progress: (\d+)%")
 # files the steps read: a label and the step that makes the file, or None for reference files
 FILES = {
@@ -82,7 +82,7 @@ def steps() -> list[dict]:
     options = [{**o, "text": o["note"], "note": f"Issued at {o['text']}"} for o in data.hours()]
     hour = {"name": "hour", "label": "Issued at", "type": "select", "options": options}
     # offered only for an issue hour before the day-ahead results
-    use = {"name": "forecaster", "label": "Use the forecaster", "type": "check", "note": ""}
+    use = {"name": "market_estimator", "label": "Use the market estimator", "type": "check", "note": ""}
     found = [
         {"key": "daily", "title": "Daily forecast run", "kind": "chain", "lead": True,
          "text": "Refresh GOPACS, weather and market data, then issue tomorrow's forecast with the inspector's verdict.",
@@ -160,11 +160,11 @@ def commands(key: str, form: dict) -> list[list[str]]:
     day = lambda name: datetime.strptime(form[name], "%Y-%m-%d").strftime("%Y-%m-%d")
     # the issue hour as a checked number, for the steps that ask for it
     at = lambda: ["--issue-hour", str(int(form["hour"]))] if form.get("hour") else []
-    # the forecaster only applies before the day-ahead results
-    early = lambda: form.get("forecaster") and form.get("hour") and int(form["hour"]) < _market_hour()
-    use = lambda: [*at(), "--forecaster"] if early() else at()
-    # with the forecaster, its own stage first
-    market = lambda first, last: [["forecast-market", "--start", first, "--end", last]] if early() else []
+    # the market estimator only applies before the day-ahead results
+    early = lambda: form.get("market_estimator") and form.get("hour") and int(form["hour"]) < _market_hour()
+    use = lambda: [*at(), "--market-estimator"] if early() else at()
+    # with the market estimator, its own stage first
+    market = lambda first, last: [["estimate-market", "--start", first, "--end", last]] if early() else []
     single = {
         "gopacs": lambda: [["fetch-gopacs"]],
         "weather": lambda: [["fetch-weather", "--start", _data().weather_start(_today(), 2),
@@ -346,7 +346,7 @@ def clear(with_model: bool) -> int:
     if with_model:
         # not listed in the Files panel, but made by training like the model
         files += [data.file_path(f"inspector_history{'' if i == 0 else f'_{h}'}") for i, h in enumerate(data.CONFIG.hours)]
-        files.append(data.model_dir() / inspector.FORECASTER_HISTORY)
+        files.append(data.model_dir() / inspector.MARKET_ESTIMATOR_HISTORY)
     if settings.RUNS_DIR.exists():
         files += [file for kind in ("*.json", "*.tmp", "*.log") for file in settings.RUNS_DIR.glob(kind)]
     with _lock:

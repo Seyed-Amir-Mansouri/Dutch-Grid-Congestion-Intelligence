@@ -66,7 +66,7 @@ def forecast(request):
         previous=days[days.index(day) + 1] if days.index(day) + 1 < len(days) else None,
         next=days[days.index(day) - 1] if days.index(day) > 0 else None,
         issued=pd.Timestamp(rows["issued_at"].max()).tz_convert("Europe/Amsterdam") if len(rows) else None,
-        with_forecaster=bool(len(rows)) and str(rows.loc[rows["issued_at"].idxmax(), "model_version"]).endswith("+forecaster"),
+        with_market_estimator=bool(len(rows)) and str(rows.loc[rows["issued_at"].idxmax(), "model_version"]).endswith(("+market_estimator", "+forecaster")),
         active=len(rows),
         alerts=int(counts.get("alert", 0)),
         vetoed=int(counts.get("vetoed", 0)),
@@ -202,12 +202,12 @@ def performance(request):
     """The test in 14-day windows: area-days and requests, actual against the flags the inspector kept."""
     context = _common(request, "performance")
     tests = [{**h, "rolling": data.rolling_test(h["value"])} for h in data.hours()]
-    # before the day-ahead results, also the main model with the forecaster
+    # before the day-ahead results, also the main model with the market estimator
     main = f"{data.CONFIG.features.issue_hour:02d}:00"
-    tests += [{**h, "forecaster": True, "note": f"{h['note']} · {main} model with the forecaster",
-               "rolling": data.rolling_test(h["value"], forecaster=True)} for h in data.hours() if h["early"]]
+    tests += [{**h, "market_estimator": True, "note": f"{h['note']} · {main} model with the market estimator",
+               "rolling": data.rolling_test(h["value"], market_estimator=True)} for h in data.hours() if h["early"]]
     context.update(threshold=context["threshold"] or data.CONFIG.model.day_threshold, tests=tests,
-                   forecaster=data.forecaster_test())
+                   market_estimator=data.market_estimator_test())
     return render(request, "console/performance.html", context)
 
 
