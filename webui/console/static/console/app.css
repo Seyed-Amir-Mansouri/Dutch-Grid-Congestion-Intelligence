@@ -115,6 +115,7 @@ code, .mono { font-family: var(--mono); font-size: 12.5px; }
 .btn-ghost.off { opacity: .3; cursor: default; }
 .panel .btn-ghost, .step .btn-ghost { color: var(--muted); border-color: var(--line); font-size: 12px; }
 .btn:disabled { opacity: .45; cursor: not-allowed; }
+.fields select:disabled, .fields input:disabled { opacity: .45; cursor: not-allowed; }
 .daypick { display: flex; gap: 8px; align-items: center; }
 .daypick select { height: 38px; padding: 0 36px 0 14px; border: 1px solid rgba(255,255,255,.3); border-radius: var(--radius); background: rgba(255,255,255,.06);
   color: #fff; font: 500 14px var(--cond); letter-spacing: .6px; text-transform: uppercase; appearance: none; cursor: pointer;
