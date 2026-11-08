@@ -234,8 +234,8 @@ FILE_GROUPS = [
               ("forecasts", "System forecasts", "Update market data"), ("locations", "Area locations", "Locate areas")]),
     ("Model", [(f"{name}{suffix}", f"{label}{when}", maker) for suffix, when in
                [("", "")] + [(f"_{h}", f", {h:02d}:00") for h in CONFIG.hours[1:]]
-               for name, label, maker in (("model", "Trained model", "Retrain model"), ("walk_forward", "Test (14-day windows)", "Run test"))]
-              + [(f"walk_forward_forecaster_{h}", f"Test (14-day windows), {h:02d}:00 with the forecaster", "Run test")
+               for name, label, maker in (("model", "Trained model", "Retrain model"), ("walk_forward", "Test (14-day windows)", "Download from Drive"))]
+              + [(f"walk_forward_forecaster_{h}", f"Test (14-day windows), {h:02d}:00 with the forecaster", "Download from Drive")
                  for h in CONFIG.hours if h < CONFIG.features.market_hour]),
     ("Outputs", [("predictions", "Quarter-hour forecasts", "Issue forecast"),
                  ("area_predictions", "Area forecasts ledger", "Issue forecast"), ("validation", "Validation history", "Validate"),

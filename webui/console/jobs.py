@@ -21,7 +21,6 @@ STAGES = {
     "train": ("Train", "Predictor and inspector"),
     "predict": ("Forecast", "Score areas, apply the veto"),
     "validate": ("Validate", "Score against GOPACS"),
-    "rolling-test": ("Test", "Retrain daily, score each day"),
     "forecast-market": ("Forecaster", "Day-ahead price, wind and solar"),
 }
 # short stage names for the files a Drive download replaces
@@ -52,7 +51,6 @@ NEEDS = {
     "train": INPUTS,
     "predict": ["model"] + INPUTS,
     "validate": ["area_predictions"] + INPUTS,
-    "rolling": INPUTS,
 }
 SECRET = re.compile(r"(securityToken=)[^&\s\"']+", re.IGNORECASE)
 _lock = threading.Lock()
@@ -80,9 +78,6 @@ def steps() -> list[dict]:
 
     today = _today()
     tomorrow = today + timedelta(days=1)
-    # the last settled day: requests of later days are not complete yet
-    settled = data.label_end()
-    test_end = settled.date() if settled is not None else today - timedelta(days=2)
     forecast_days = [d.strftime("%Y-%m-%d") for d in data.forecast_days()]
     options = [{**o, "text": o["note"], "note": f"Issued at {o['text']}"} for o in data.hours()]
     hour = {"name": "hour", "label": "Issued at", "type": "select", "options": options}
@@ -112,11 +107,6 @@ def steps() -> list[dict]:
         {"key": "validate", "title": "Validate", "kind": "model",
          "text": "Score settled forecasts against GOPACS requests and append to the validation history.",
          "fields": [{"name": "as_of", "label": "As of", "type": "days", "options": forecast_days}]},
-        {"key": "rolling", "title": "Run test", "kind": "model",
-         "text": "Forecast settled days as if live: retrain the predictor and inspector for each day on what was known "
-                 "two days before, then score against GOPACS in 14-day windows. Three windows take about an hour.",
-         "fields": [{"name": "start", "label": "From", "type": "date", "value": test_end - timedelta(days=41)},
-                    {"name": "end", "label": "To", "type": "date", "value": test_end}, hour, use]},
     ]
     for step in found:
         step["missing"] = missing(step["key"])
@@ -185,8 +175,6 @@ def commands(key: str, form: dict) -> list[list[str]]:
         "train": lambda: [["train", *at()]],
         "predict": lambda: [*market(day("date"), day("date")), ["predict", "--date", day("date"), *use()]],
         "validate": lambda: [["validate", "--as-of", day("as_of")]],
-        "rolling": lambda: [*market(day("start"), day("end")),
-                            ["rolling-test", "--start", day("start"), "--end", day("end"), *use()]],
     }
     if key in single:
         return single[key]()
