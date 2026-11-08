@@ -2,9 +2,9 @@
 {% block title %}Operations{% endblock %}
 {% block eyebrow %}Control room{% endblock %}
 {% block heading %}Operations{% endblock %}
-{% block lede %}Refresh data, retrain and issue forecasts. One job runs at a time; follow each stage and its log live.{% endblock %}
+{% block lede %}Update the data, retrain the model and make forecasts here. One job runs at a time, and you can follow each stage and its log.{% endblock %}
 {% block hero_side %}<div class="keystate {% if entsoe_key %}ok{% else %}warn{% endif %}">
-  <span class="dot"></span>ENTSO-E key {% if entsoe_key %}found in environment{% else %}not set{% endif %}
+  <span class="dot"></span>ENTSO-E key {% if entsoe_key %}found{% else %}not set, so market data cannot be updated{% endif %}
 </div>{% endblock %}
 
 {% block content %}

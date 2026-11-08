@@ -259,17 +259,17 @@ def feature_groups(columns: list[str]) -> list[tuple[str, list[str]]]:
 
 
 FILE_GROUPS = [
-    ("Data", [("gopacs", "GOPACS requests", "Update GOPACS"), ("notices", "Restriction notices", "Update GOPACS"),
-              ("weather", "Weather forecasts", "Update weather"), ("sdac", "Day-ahead market", "Update market data"),
-              ("forecasts", "System forecasts", "Update market data"), ("locations", "Area locations", "Locate areas")]),
+    ("Data", [("gopacs", "GOPACS requests", "Update GOPACS"), ("notices", "Transport restriction notices", "Update GOPACS"),
+              ("weather", "Weather forecasts", "Update weather"), ("sdac", "Day-ahead prices", "Update market data"),
+              ("forecasts", "Load, wind and solar forecasts", "Update market data"), ("locations", "Area locations", "Locate areas")]),
     ("Model", [(f"{name}{suffix}", f"{label}{when}", maker) for suffix, when in
                [("", "")] + [(f"_{h}", f", {h:02d}:00") for h in CONFIG.hours[1:]]
                for name, label, maker in (("model", "Trained model", "Retrain model"), ("walk_forward", "Test (14-day windows)", "Download from Drive"))]
               + [(f"walk_forward_market_estimator_{h}", f"Test (14-day windows), {h:02d}:00 with the market estimator", "Download from Drive")
                  for h in CONFIG.hours if h < CONFIG.features.market_hour]),
-    ("Outputs", [("predictions", "Quarter-hour forecasts", "Issue forecast"),
-                 ("area_predictions", "Area forecasts ledger", "Issue forecast"), ("validation", "Validation history", "Validate"),
-                 ("market_estimates", "Market estimator's day-ahead values", "Issue forecast with the market estimator")]),
+    ("Outputs", [("predictions", "Forecasts per quarter-hour", "Issue forecast"),
+                 ("area_predictions", "Saved forecasts", "Issue forecast"), ("validation", "Validation history", "Validate"),
+                 ("market_estimates", "Market estimator's values", "Daily forecast run with the market estimator")]),
 ]
 
 

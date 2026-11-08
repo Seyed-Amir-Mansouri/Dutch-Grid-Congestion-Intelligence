@@ -9,14 +9,15 @@
 <div class="kpis">
   <div class="kpi kpi-red"><span class="kpi-label">Requests</span><span class="kpi-value">{{ found.requests }}</span><span class="kpi-note">announced in 30 days</span></div>
   <div class="kpi"><span class="kpi-label">Areas</span><span class="kpi-value">{{ found.areas }}</span><span class="kpi-note">with at least one request</span></div>
-  <div class="kpi"><span class="kpi-label">Area-days</span><span class="kpi-value">{{ found.area_days }}</span><span class="kpi-note">what the model forecasts</span></div>
-  <div class="kpi kpi-dark"><span class="kpi-label">Energy requested</span><span class="kpi-value">{{ found.mwh|floatformat:0 }}<small> MWh</small></span><span class="kpi-note">sum of MW × duration</span></div>
+  <div class="kpi"><span class="kpi-label">Area-days</span><span class="kpi-value">{{ found.area_days }}</span><span class="kpi-note">an area on a day with a request: what the model predicts</span></div>
+  <div class="kpi kpi-dark"><span class="kpi-label">Energy requested</span><span class="kpi-value">{{ found.mwh|floatformat:0 }}<small> MWh</small></span><span class="kpi-note">requested MW times hours</span></div>
 </div>
 
 <section class="panel">
   <header class="panel-head"><h2>Areas with requests per day</h2>
     <ul class="legend inline"><li><i class="sw" style="background:#41609e"></i>Feed-in</li><li><i class="sw" style="background:#c9821b"></i>Offtake</li></ul>
   </header>
+  <p class="muted pad">Feed-in means producers in the area are asked to produce less. Offtake means users in the area are asked to use less.</p>
   <div class="chart-wrap">{{ found.chart }}</div>
 </section>
 
@@ -34,7 +35,7 @@
       <li data-tip="{{ o.operator }}|{{ o.area_days }} area-days · {{ o.areas }} areas"><span class="hb-label">{{ o.operator }}</span>
         <span class="hb-track"><span class="hb-fill" style="width:{{ o.share|floatformat:1 }}%"></span></span><span class="hb-num mono">{{ o.area_days }}</span></li>
     {% endfor %}</ul>
-    <header class="panel-head sub"><h2>Restriction notices</h2><span class="muted">latest</span></header>
+    <header class="panel-head sub"><h2>Transport restriction notices</h2><span class="muted">latest warnings from the grid operator</span></header>
     {% if notices %}<table class="table compact"><tbody>
       {% for n in notices %}<tr><td>{{ n.operator }}<small class="block muted">{{ n.direction }}</small></td>
         <td class="mono muted">{{ n.start_time|date:"j M H:i" }} – {{ n.end_time|date:"j M H:i" }}</td></tr>{% endfor %}
@@ -42,6 +43,6 @@
   </section>
 </div>
 {% else %}
-<div class="panel empty"><h2>No GOPACS data</h2><p>Run “Update GOPACS” in Operations.</p><a class="btn btn-red" href="/operations">Go to Operations</a></div>
+<div class="panel empty"><h2>No GOPACS data yet</h2><p>Use Update GOPACS on the Operations page.</p><a class="btn btn-red" href="/operations">Go to Operations</a></div>
 {% endif %}
 {% endblock %}

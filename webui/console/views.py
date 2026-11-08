@@ -204,7 +204,7 @@ def performance(request):
     tests = [{**h, "rolling": data.rolling_test(h["value"])} for h in data.hours()]
     # before the day-ahead results, also the main model with the market estimator
     main = f"{data.CONFIG.features.issue_hour:02d}:00"
-    tests += [{**h, "market_estimator": True, "note": f"{h['note']} · {main} model with the market estimator",
+    tests += [{**h, "market_estimator": True, "note": f"{h['note']}, with the market estimator",
                "rolling": data.rolling_test(h["value"], market_estimator=True)} for h in data.hours() if h["early"]]
     context.update(threshold=context["threshold"] or data.CONFIG.model.day_threshold, tests=tests,
                    market_estimator=data.market_estimator_test())
@@ -231,15 +231,15 @@ def model(request):
         ("History starts", f"{config.grid.start_date:%d %b %Y}"),
         ("Grid cell size", f"{config.grid.cell_degrees}°"),
         ("Directions", ", ".join(config.grid.directions)),
-        ("Forecast issued at", ", ".join(f"{h['text']} ({h['note']})" for h in data.hours()) + " the day before"),
-        ("Left out before the day-ahead results", ", ".join(features.MARKET_INPUTS)),
-        ("Area active if a request in the last", f"{config.features.active_days} days"),
-        ("Day flag threshold", f"{config.model.day_threshold}"),
-        ("Risky window from", f"{config.model.window_threshold} per quarter-hour"),
-        ("Inspector veto below", f"{config.inspector.veto_cut:.0%} confidence"),
-        ("Never vetoed from", f"{config.inspector.keep_above} predictor chance"),
-        ("Inspector trained on chances from", f"{config.inspector.learn_from}"),
-        ("Inspector learns from", f"{config.inspector.start_date:%b %Y}"),
-        ("Validation window", f"{config.validation.window_days} days"),
+        ("Forecast made at", ", ".join(f"{h['text']} ({h['note']})" for h in data.hours()) + " on the day before"),
+        ("Not used before the day-ahead results", ", ".join(features.MARKET_INPUTS)),
+        ("An area counts as active if it had a request in the last", f"{config.features.active_days} days"),
+        ("Flag an area from a chance of", f"{config.model.day_threshold}"),
+        ("Risk window starts at a chance of", f"{config.model.window_threshold}"),
+        ("Inspector removes flags below", f"{config.inspector.veto_cut:.0%} confidence"),
+        ("Flags never removed from a chance of", f"{config.inspector.keep_above}"),
+        ("Inspector also learns from chances from", f"{config.inspector.learn_from}"),
+        ("Inspector learns from days since", f"{config.inspector.start_date:%b %Y}"),
+        ("Validation looks at the last", f"{config.validation.window_days} days"),
     ]
     return render(request, "console/model.html", context)

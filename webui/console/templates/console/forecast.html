@@ -3,7 +3,7 @@
 {% block title %}Forecast{% endblock %}
 {% block eyebrow %}Day-ahead congestion forecast{% endblock %}
 {% block heading %}{% if day %}{{ day|date:"l j F Y" }}{% else %}No forecast yet{% endif %}{% endblock %}
-{% block lede %}{% if day %}Issued {{ issued|date:"j M Y, H:i" }}{% if with_market_estimator %} with the market estimator{% endif %} · flags at peak probability ≥ {{ threshold }}, checked by the inspector before they are shown.{% else %}Run the daily forecast from Operations to issue the first one.{% endif %}{% endblock %}
+{% block lede %}{% if day %}Made on {{ issued|date:"j M Y, H:i" }}{% if with_market_estimator %}, using the market estimator for the market values{% endif %}. An area is flagged when its chance of a request reaches {{ threshold }}. The inspector then removes flags that look wrong.{% else %}Start the Daily forecast run on the Operations page to make the first forecast.{% endif %}{% endblock %}
 {% block hero_side %}{% if days %}
 <div class="daypick">
   {% if previous %}<a class="btn btn-ghost" href="?day={{ previous|date:'Y-m-d' }}" aria-label="Previous day">‹</a>{% else %}<span class="btn btn-ghost off">‹</span>{% endif %}
@@ -16,19 +16,19 @@
 {% block content %}
 {% if not days %}
 <div class="panel empty">
-  <h2>No forecasts in the ledger</h2>
-  <p>The forecast ledger is empty. Start the daily run to refresh the data and score tomorrow's areas.</p>
+  <h2>No forecast yet</h2>
+  <p>Nothing has been forecast yet. Start the Daily forecast run on the Operations page. It updates the data and checks every area for tomorrow.</p>
   <a class="btn btn-red" href="/operations">Go to Operations</a>
 </div>
 {% else %}
 <div class="kpis">
-  <div class="kpi kpi-red"><span class="kpi-label">Areas on alert</span><span class="kpi-value">{{ alerts }}</span><span class="kpi-note">flags kept by the inspector</span></div>
-  <div class="kpi"><span class="kpi-label">Vetoed</span><span class="kpi-value">{{ vetoed }}</span><span class="kpi-note">flags the inspector judged likely wrong</span></div>
-  <div class="kpi"><span class="kpi-label">Active areas</span><span class="kpi-value">{{ active }}</span><span class="kpi-note">a request in the last 90 days</span></div>
+  <div class="kpi kpi-red"><span class="kpi-label">Areas on alert</span><span class="kpi-value">{{ alerts }}</span><span class="kpi-note">flags the inspector kept</span></div>
+  <div class="kpi"><span class="kpi-label">Vetoed</span><span class="kpi-value">{{ vetoed }}</span><span class="kpi-note">flags the inspector removed as likely wrong</span></div>
+  <div class="kpi"><span class="kpi-label">Active areas</span><span class="kpi-value">{{ active }}</span><span class="kpi-note">had a request in the last 90 days</span></div>
   {% if settled %}
-  <div class="kpi kpi-dark"><span class="kpi-label">Outcome</span><span class="kpi-value">{{ outcome_correct }}<small>/{{ alerts }}</small></span><span class="kpi-note">alerts that got a request · {{ outcome_requests }} areas had one</span></div>
+  <div class="kpi kpi-dark"><span class="kpi-label">Outcome</span><span class="kpi-value">{{ outcome_correct }}<small>/{{ alerts }}</small></span><span class="kpi-note">alerts that got a request · {{ outcome_requests }} areas got one in total</span></div>
   {% else %}
-  <div class="kpi kpi-dark"><span class="kpi-label">Outcome</span><span class="kpi-value small">Pending</span><span class="kpi-note">GOPACS record not complete yet</span></div>
+  <div class="kpi kpi-dark"><span class="kpi-label">Outcome</span><span class="kpi-value small">Pending</span><span class="kpi-note">requests for this day are not all in yet</span></div>
   {% endif %}
 </div>
 
@@ -38,18 +38,19 @@
       <button type="button" class="map-reset" id="map-reset">Reset view</button></header>
     <div class="live-map" id="map" aria-label="Map of GOPACS areas by forecast status"></div>
     <ul class="legend">{% for icon, label in legend %}<li>{{ icon }}{{ label }}</li>{% endfor %}
-      <li class="muted small">Glow strength follows the peak probability · click an area to light it up</li></ul>
+      <li class="muted small">A stronger glow means a higher chance. Click an area to highlight it.</li></ul>
   </section>
 
   <section class="panel">
     <header class="panel-head"><h2>Flagged areas</h2><span class="muted">{{ flagged|length }} of {{ active }}</span></header>
+    <p class="muted pad">Peak is the highest chance of a request in any quarter-hour. Inspector is how sure the inspector is that the flag is right. Risk window is the time of day when the chance is high.</p>
     {% if flagged %}
     <div class="table-scroll"><table class="table">
       <thead><tr><th></th><th>Area</th><th>Peak</th><th>Inspector</th><th>Risk window</th>{% if settled %}<th>Request</th>{% endif %}</tr></thead>
       <tbody>
       {% for r in flagged %}
         <tr class="row-{{ r.status }} row-pick" data-point="{{ r.id }}" tabindex="0">
-          <td class="icon-cell" title="{% if r.status == 'alert' %}Flag kept{% else %}Vetoed{% endif %}">{{ r.icon }}</td>
+          <td class="icon-cell" title="{% if r.status == 'alert' %}Kept by the inspector{% else %}Removed by the inspector{% endif %}">{{ r.icon }}</td>
           <td class="area"><span title="{{ r.area }}">{{ r.area }}</span><small>{{ r.cell|default:"not located" }}</small></td>
           <td class="meter-cell">{{ r.peak_meter }}</td>
           <td class="meter-cell">{{ r.inspector_meter }}</td>
@@ -60,7 +61,7 @@
       </tbody>
     </table></div>
     {% else %}
-    <p class="muted pad">No area reached the flag threshold for this day.</p>
+    <p class="muted pad">No area was flagged for this day.</p>
     {% endif %}
   </section>
 </div>

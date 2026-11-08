@@ -14,13 +14,13 @@ from django.conf import settings
 
 PYTHON = os.environ.get("PIPELINE_PYTHON", sys.executable)
 STAGES = {
-    "fetch-gopacs": ("GOPACS", "Requests and notices"),
-    "fetch-weather": ("Weather", "Open-Meteo per grid cell"),
-    "fetch-entsoe": ("Market", "ENTSO-E prices and forecasts"),
-    "locate": ("Locate", "Areas to grid cells"),
+    "fetch-gopacs": ("GOPACS", "New requests and notices"),
+    "fetch-weather": ("Weather", "Weather per grid cell"),
+    "fetch-entsoe": ("Market", "Prices and forecasts from ENTSO-E"),
+    "locate": ("Locate", "Areas on the map"),
     "train": ("Train", "Predictor and inspector"),
-    "predict": ("Forecast", "Score areas, apply the veto"),
-    "validate": ("Validate", "Score against GOPACS"),
+    "predict": ("Forecast", "Check every area, then the inspector"),
+    "validate": ("Validate", "Compare with real requests"),
     "estimate-market": ("Market estimator", "Day-ahead price, wind and solar"),
 }
 # short stage names for the files a Drive download replaces
@@ -36,7 +36,7 @@ FILES = {
     "forecasts": ("System forecasts", "Update market data"),
     "locations": ("Area locations", "Locate areas"),
     "model": ("Trained model", "Retrain model"),
-    "area_predictions": ("Area forecasts ledger", "Daily forecast run or Issue forecast"),
+    "area_predictions": ("Saved forecasts", "Daily forecast run or Issue forecast"),
     "postcodes": ("GeoNames postcodes", None),
     "places": ("GeoNames places", None),
     "csc_report": ("Enexis CSC report", None),
@@ -85,27 +85,27 @@ def steps() -> list[dict]:
     use = {"name": "market_estimator", "label": "Use the market estimator", "type": "check", "note": ""}
     found = [
         {"key": "daily", "title": "Daily forecast run", "kind": "chain", "lead": True,
-         "text": "Refresh GOPACS, weather and market data, then issue tomorrow's forecast with the inspector's verdict.",
+         "text": "Updates the GOPACS, weather and market data, then makes the forecast for the day you pick. This is the step to use every day.",
          "fields": [{"name": "date", "label": "Delivery day", "type": "date", "value": tomorrow}, hour, use]},
         {"key": "gopacs", "title": "Update GOPACS", "kind": "data",
-         "text": "Download congestion requests and transport-restriction notices from GOPACS.", "fields": []},
+         "text": "Downloads the new congestion requests and transport restriction notices from GOPACS.", "fields": []},
         {"key": "weather", "title": "Update weather", "kind": "data",
-         "text": "Fetch Open-Meteo forecasts for every grid cell and merge them into the weather file.",
+         "text": "Downloads the weather forecast for every grid cell, starting from the last day you already have.",
          "fields": []},
         {"key": "entsoe", "title": "Update market data", "kind": "data", "needs_key": True,
-         "text": "Fetch day-ahead prices, net position and system forecasts from ENTSO-E and merge them into the "
-                 "market files.",
+         "text": "Downloads the day-ahead prices, net position and the load, wind and solar forecasts from ENTSO-E, "
+                 "starting from the last day you already have. Needs the ENTSOE_API_KEY.",
          "fields": []},
         {"key": "locate", "title": "Locate areas", "kind": "model",
-         "text": "Place every GOPACS area on the map and assign its grid cell.", "fields": []},
+         "text": "Finds each GOPACS area on the map and gives it a weather grid cell. Run it when new areas show up.", "fields": []},
         {"key": "train", "title": "Retrain model", "kind": "model",
-         "text": "Train the predictor and the inspector on all settled history. Takes about half an hour.", "fields": [hour]},
+         "text": "Trains the predictor and the inspector again on all days that are complete. Takes about half an hour.", "fields": [hour]},
         {"key": "predict", "title": "Issue forecast", "kind": "model",
-         "text": "Score every active area for one delivery day and log it in the forecast ledger. Unlike the Daily forecast run, it downloads nothing, so it is fast, works without GOPACS or ENTSO-E, and can redo an older forecast day.",
+         "text": "Makes the forecast again for a day that already has one, without downloading anything. It is fast and works without internet, for example to compare the Before and After Day-Ahead forecasts.",
          "fields": [{"name": "date", "label": "Delivery day", "type": "days",
                      "options": forecast_days}, hour, use]},
         {"key": "validate", "title": "Validate", "kind": "model",
-         "text": "Score settled forecasts against GOPACS requests and append to the validation history.",
+         "text": "Compares past forecasts with the requests that really came and saves the result.",
          "fields": [{"name": "as_of", "label": "As of", "type": "days", "options": forecast_days}]},
     ]
     for step in found:

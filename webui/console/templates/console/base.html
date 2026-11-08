@@ -25,7 +25,7 @@
   <div class="top-status">
     {% if running %}<a class="pill pill-run" href="/operations?job={{ running.id }}"><span class="pulse"></span>{{ running.title }}</a>{% endif %}
     {% if model_version %}<a class="pill pill-model" href="/model" title="Trained {{ model_built|date:'j M Y, H:i' }}">{{ model_version }}</a>
-    {% else %}<span class="pill pill-warn">No model trained</span>{% endif %}
+    {% else %}<span class="pill pill-warn">No model yet</span>{% endif %}
   </div>
 </header>
 
@@ -45,8 +45,8 @@
 </main>
 
 <footer class="foot">
-  <span>Congestion Intelligence · next-day congestion risk per GOPACS area</span>
-  <span>Predictor + inspector veto · data: GOPACS, ENTSO-E, Open-Meteo</span>
+  <span>Congestion Intelligence · which areas may get a congestion request tomorrow</span>
+  <span>Predictor and inspector · data from GOPACS, ENTSO-E and Open-Meteo</span>
 </footer>
 <div id="tip" class="tip" role="tooltip" hidden></div>
 <script src="{% static 'console/app.js' %}?v={{ assets }}"></script>

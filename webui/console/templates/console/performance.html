@@ -2,12 +2,15 @@
 {% block title %}Performance{% endblock %}
 {% block eyebrow %}Forecast quality{% endblock %}
 {% block heading %}Performance{% endblock %}
-{% block lede %}The test in 14-day windows: each day forecast as if live, with the predictor and inspector retrained on what was known two days before it.{% endblock %}
+{% block lede %}How the forecast would have done on past days. Each day was forecast as if it was live, using only what was known at the time, with the model retrained for every day. Days are grouped in 14-day windows.{% endblock %}
 
 {% block content %}
+<section class="panel">
+  <p class="pad">How to read the tables. <b>Actual</b> is what really happened: the areas that got a request, and the number of requests. <b>Flagged</b> is the areas the forecast flagged and the inspector kept. <b>Right</b> is a flagged area that got a request, and <b>wrong</b> is one that got none. <b>Missed</b> is an area that got a request without being flagged. <b>Caught</b> is the number of requests that fell in a flagged area.</p>
+</section>
 {% for t in tests %}{% with rolling=t.rolling %}
 <section class="panel">
-  <header class="panel-head"><h2>Issued {{ t.text }} on D−1 <small class="muted">{{ t.note }}</small></h2>
+  <header class="panel-head"><h2>{{ t.note }} <small class="muted">forecast made at {{ t.text }} the day before</small></h2>
     <span class="muted">{% if rolling %}{{ rolling.start|date:"j M" }}–{{ rolling.end|date:"j M Y" }} · {{ rolling.count }} days · run {{ rolling.made|date:"j M, H:i" }}{% endif %}</span></header>
   {% if rolling %}
   <div class="table-scroll"><table class="table">
@@ -24,7 +27,8 @@
   </table></div>
   {% else %}<p class="muted pad">Not available yet. Use <b>Download from Drive</b> on the Operations page.</p>{% endif %}
   {% if t.market_estimator and market_estimator %}
-  <header class="panel-head sub"><h2>The market estimator <small class="muted">correlation of its day-ahead values with the real ones, 1 is perfect · run {{ market_estimator.made|date:"j M, H:i" }}</small></h2></header>
+  <header class="panel-head sub"><h2>The market estimator <small class="muted">run {{ market_estimator.made|date:"j M, H:i" }}</small></h2></header>
+  <p class="muted pad">Before the day-ahead results are out, the market estimator guesses the price, net position, wind and solar values. The table shows how closely its guesses follow the real values: 1 is a perfect match and 0 means no link.</p>
   <div class="table-scroll"><table class="table">
     <thead>
       <tr><th>Window</th>{% for r in market_estimator.blocks.0.rows %}<th class="num">{{ r.label }}</th>{% endfor %}</tr>

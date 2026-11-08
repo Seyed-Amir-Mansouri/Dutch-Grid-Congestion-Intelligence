@@ -2,23 +2,23 @@
 {% block title %}Model{% endblock %}
 {% block eyebrow %}Two-stage forecast{% endblock %}
 {% block heading %}Model{% endblock %}
-{% block lede %}A gradient-boosted predictor scores every area and quarter-hour; an inspector trained on its past results vetoes flags that are likely wrong.{% endblock %}
+{% block lede %}Two steps. The predictor gives every area a chance of a request for each quarter-hour. The inspector then checks the flags and removes the ones that look wrong.{% endblock %}
 
 {% block content %}
 {% if bundle %}
 <div class="flow">
-  <div class="flow-step"><span class="flow-n">01</span><h3>Inputs</h3><p>{{ bundle.features|length }} values per area and quarter-hour: market, weather, notices and request history, all known by 14:00 the day before.</p></div>
+  <div class="flow-step"><span class="flow-n">01</span><h3>Inputs</h3><p>{{ bundle.features|length }} facts about each area and quarter-hour: the electricity market, the weather, grid notices and the area's past requests. Only what is known when the forecast is made is used.</p></div>
   <div class="flow-arrow" aria-hidden="true"></div>
-  <div class="flow-step"><span class="flow-n">02</span><h3>Predictor</h3><p>Gradient-boosted trees (<code>{{ estimator_name }}</code>) give a request probability per quarter-hour. An area-day is flagged when its peak is ≥ {{ bundle.day_threshold }}.</p></div>
+  <div class="flow-step"><span class="flow-n">02</span><h3>Predictor</h3><p>A tree-based model (<code>{{ estimator_name }}</code>) gives the chance of a request for each quarter-hour. An area is flagged for the day when its highest chance reaches {{ bundle.day_threshold }}.</p></div>
   <div class="flow-arrow" aria-hidden="true"></div>
-  <div class="flow-step flow-red"><span class="flow-n">03</span><h3>Inspector</h3><p>{% if veto %}Judges each flag from {{ veto_inputs }} inputs: the predictor's score and recent track record, and the day's conditions. Flags below {% widthratio veto.cut 1 100 %}% confidence are vetoed.{% else %}Not trained: too few past flags.{% endif %}</p></div>
+  <div class="flow-step flow-red"><span class="flow-n">03</span><h3>Inspector</h3><p>{% if veto %}Looks at each flag using {{ veto_inputs }} facts: the predictor's score, how often recent flags for the area were right, and the conditions that day. It removes flags it is less than {% widthratio veto.cut 1 100 %}% sure about, unless the predictor's score is very high.{% else %}Not trained yet: there are too few past flags.{% endif %}</p></div>
 </div>
 
 <div class="kpis">
   <div class="kpi"><span class="kpi-label">Model</span><span class="kpi-value small">{{ model_name }}</span><span class="kpi-note">built {{ trained_at|date:"j M Y, H:i" }} · <span class="mono">{{ bundle.model_version }}</span></span></div>
   <div class="kpi"><span class="kpi-label">Inputs</span><span class="kpi-value">{{ bundle.features|length }}</span><span class="kpi-note">per area and quarter-hour</span></div>
   {% if veto %}
-  <div class="kpi"><span class="kpi-label">Inspector trained on</span><span class="kpi-value">{{ veto.trained_flags }}</span><span class="kpi-note">past flags scored out of sample</span></div>
+  <div class="kpi"><span class="kpi-label">Inspector trained on</span><span class="kpi-value">{{ veto.trained_flags }}</span><span class="kpi-note">past flags, scored by a model that had not seen those days</span></div>
   {% endif %}
 </div>
 
@@ -36,6 +36,6 @@
   </section>
 </div>
 {% else %}
-<div class="panel empty"><h2>No trained model</h2><p>Run “Retrain model” in Operations.</p><a class="btn btn-red" href="/operations">Go to Operations</a></div>
+<div class="panel empty"><h2>No model yet</h2><p>Use Retrain model on the Operations page, or Download from Drive to get a trained one.</p><a class="btn btn-red" href="/operations">Go to Operations</a></div>
 {% endif %}
 {% endblock %}
