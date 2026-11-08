@@ -83,6 +83,7 @@ def steps() -> list[dict]:
     # the last settled day: requests of later days are not complete yet
     settled = data.label_end()
     test_end = settled.date() if settled is not None else today - timedelta(days=2)
+    forecast_days = [d.strftime("%Y-%m-%d") for d in data.forecast_days()]
     options = [{**o, "text": o["note"], "note": f"Issued at {o['text']}"} for o in data.hours()]
     hour = {"name": "hour", "label": "Issued at", "type": "select", "options": options}
     # offered only for an issue hour before the day-ahead results
@@ -105,12 +106,12 @@ def steps() -> list[dict]:
         {"key": "train", "title": "Retrain model", "kind": "model",
          "text": "Train the predictor and the inspector on all settled history. Takes about half an hour.", "fields": [hour]},
         {"key": "predict", "title": "Issue forecast", "kind": "model",
-         "text": "Score every active area for one delivery day and log it in the forecast ledger.",
+         "text": "Score every active area for one delivery day and log it in the forecast ledger. Unlike the Daily forecast run, it downloads nothing, so it is fast, works without GOPACS or ENTSO-E, and can redo an older forecast day.",
          "fields": [{"name": "date", "label": "Delivery day", "type": "days",
-                     "options": [d.strftime("%Y-%m-%d") for d in data.forecast_days()]}, hour, use]},
+                     "options": forecast_days}, hour, use]},
         {"key": "validate", "title": "Validate", "kind": "model",
          "text": "Score settled forecasts against GOPACS requests and append to the validation history.",
-         "fields": [{"name": "as_of", "label": "As of", "type": "date", "value": today}]},
+         "fields": [{"name": "as_of", "label": "As of", "type": "days", "options": forecast_days}]},
         {"key": "rolling", "title": "Run test", "kind": "model",
          "text": "Forecast settled days as if live: retrain the predictor and inspector for each day on what was known "
                  "two days before, then score against GOPACS in 14-day windows. Three windows take about an hour.",
