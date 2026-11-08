@@ -19,7 +19,6 @@
   <div class="kpi"><span class="kpi-label">Inputs</span><span class="kpi-value">{{ bundle.features|length }}</span><span class="kpi-note">per area and quarter-hour</span></div>
   {% if veto %}
   <div class="kpi"><span class="kpi-label">Inspector trained on</span><span class="kpi-value">{{ veto.trained_flags }}</span><span class="kpi-note">past flags scored out of sample</span></div>
-  <div class="kpi kpi-dark"><span class="kpi-label">Of which correct</span><span class="kpi-value">{% widthratio veto_share 1 100 %}<small>%</small></span><span class="kpi-note">{{ veto.trained_correct }} flags had a request</span></div>
   {% endif %}
 </div>
 
