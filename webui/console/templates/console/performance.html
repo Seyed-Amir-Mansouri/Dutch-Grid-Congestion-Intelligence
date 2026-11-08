@@ -11,7 +11,7 @@
 {% for t in tests %}{% with rolling=t.rolling %}
 <section class="panel">
   <header class="panel-head"><h2>{{ t.note }} <small class="muted">forecast made at {{ t.text }} the day before</small></h2>
-    <span class="muted">{% if rolling %}{{ rolling.start|date:"j M" }}–{{ rolling.end|date:"j M Y" }} · {{ rolling.count }} days · run {{ rolling.made|date:"j M, H:i" }}{% endif %}</span></header>
+    <span class="muted">{% if rolling %}{{ rolling.start|date:"j M" }}–{{ rolling.end|date:"j M Y" }} · {{ rolling.count }} days{% endif %}</span></header>
   {% if rolling %}
   <div class="table-scroll"><table class="table">
     <thead>
@@ -27,7 +27,7 @@
   </table></div>
   {% else %}<p class="muted pad">Not available yet. Use <b>Download from Drive</b> on the Operations page.</p>{% endif %}
   {% if t.sdac_forecaster and sdac_forecaster %}
-  <header class="panel-head sub"><h2>The SDAC Forecaster <small class="muted">run {{ sdac_forecaster.made|date:"j M, H:i" }}</small></h2></header>
+  <header class="panel-head sub"><h2>The SDAC Forecaster</h2></header>
   <p class="muted pad">Before the day-ahead results are out, the SDAC Forecaster guesses the price, net position, wind and solar values. The table shows how closely its guesses follow the real values: 1 is a perfect match and 0 means no link.</p>
   <div class="table-scroll"><table class="table">
     <thead>
