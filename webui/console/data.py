@@ -276,17 +276,25 @@ def has_history(name: str, column: str, back_days: int) -> bool:
     return pd.notna(first) and first <= CONFIG.grid.start_date - pd.Timedelta(days=back_days)
 
 
+def last_day(name: str, column: str) -> pd.Timestamp:
+    """The last day a saved file has data for."""
+    file = path(name)
+    return _cached(f"last_{name}", [file], lambda: pd.to_datetime(pd.read_csv(file, usecols=[column])[column]).max().normalize())
+
+
 def weather_start(day, days_back: int) -> str:
-    """Where a weather fetch starts: some days before the day, or the start of the history when the file does not reach it."""
+    """Where a weather fetch starts: some days before the day, but no later than the last saved day."""
     # a week before the history, for the inputs that compare a day with the three before it
     if has_history("weather", "time", 7):
-        return (pd.Timestamp(day) - pd.Timedelta(days=days_back)).strftime("%Y-%m-%d")
+        start = min(pd.Timestamp(day) - pd.Timedelta(days=days_back), last_day("weather", "time") - pd.Timedelta(days=1))
+        return start.strftime("%Y-%m-%d")
     return (CONFIG.grid.start_date - pd.Timedelta(days=7)).strftime("%Y-%m-%d")
 
 
 def market_start(day) -> str:
-    """Where a market fetch starts: a week before the day, or the start of the history when the file does not reach it."""
+    """Where a market fetch starts: a week before the day, but no later than the last saved day."""
     # a month before the history, for the price history input
     if has_history("sdac", "delivery_date", 31):
-        return (pd.Timestamp(day) - pd.Timedelta(days=7)).strftime("%Y-%m-%d")
+        start = min(pd.Timestamp(day) - pd.Timedelta(days=7), last_day("sdac", "delivery_date") - pd.Timedelta(days=1))
+        return start.strftime("%Y-%m-%d")
     return (CONFIG.grid.start_date - pd.Timedelta(days=31)).strftime("%Y-%m-%d")

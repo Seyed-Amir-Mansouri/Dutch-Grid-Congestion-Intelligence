@@ -95,13 +95,11 @@ def steps() -> list[dict]:
          "text": "Download congestion requests and transport-restriction notices from GOPACS.", "fields": []},
         {"key": "weather", "title": "Update weather", "kind": "data",
          "text": "Fetch Open-Meteo forecasts for every grid cell and merge them into the weather file.",
-         "fields": [{"name": "start", "label": "From", "type": "date", "value": data.weather_start(today, 2)},
-                    {"name": "end", "label": "To", "type": "date", "value": tomorrow}]},
+         "fields": []},
         {"key": "entsoe", "title": "Update market data", "kind": "data", "needs_key": True,
          "text": "Fetch day-ahead prices, net position and system forecasts from ENTSO-E and merge them into the "
                  "market files.",
-         "fields": [{"name": "start", "label": "From", "type": "date", "value": data.market_start(today)},
-                    {"name": "end", "label": "To", "type": "date", "value": tomorrow + timedelta(days=1)}]},
+         "fields": []},
         {"key": "locate", "title": "Locate areas", "kind": "model",
          "text": "Place every GOPACS area on the map and assign its grid cell.", "fields": []},
         {"key": "train", "title": "Retrain model", "kind": "model",
@@ -175,8 +173,10 @@ def commands(key: str, form: dict) -> list[list[str]]:
     market = lambda first, last: [["forecast-market", "--start", first, "--end", last]] if early() else []
     single = {
         "gopacs": lambda: [["fetch-gopacs"]],
-        "weather": lambda: [["fetch-weather", "--start", day("start"), "--end", day("end")]],
-        "entsoe": lambda: [["fetch-entsoe", "--start", day("start"), "--end", day("end")]],
+        "weather": lambda: [["fetch-weather", "--start", _data().weather_start(_today(), 2),
+                             "--end", str(_today() + timedelta(days=1))]],
+        "entsoe": lambda: [["fetch-entsoe", "--start", _data().market_start(_today()),
+                            "--end", str(_today() + timedelta(days=2))]],
         "locate": lambda: [["locate"]],
         "train": lambda: [["train", *at()]],
         "predict": lambda: [*market(day("date"), day("date")), ["predict", "--date", day("date"), *use()]],
@@ -204,6 +204,12 @@ def commands(key: str, form: dict) -> list[list[str]]:
             chain.append(["fetch-entsoe", "--start", data.market_start(target), "--end", str(target + timedelta(days=1))])
         return chain + market(str(target), str(target)) + [["predict", "--date", str(target), *use()]]
     raise KeyError(key)
+
+
+def _data():
+    from . import data
+
+    return data
 
 
 def _market_hour() -> int:
