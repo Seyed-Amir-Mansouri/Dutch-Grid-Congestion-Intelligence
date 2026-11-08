@@ -193,10 +193,7 @@ input[type=date]:focus, select:focus, .btn:focus-visible { outline: 2px solid va
 .fields label { display: grid; gap: 4px; font: 500 10.5px var(--cond); text-transform: uppercase; letter-spacing: 1.2px; color: var(--muted); }
 .step-lead .fields label { color: #aab3c7; }
 .field-note { font: 400 11px var(--sans, inherit); text-transform: none; letter-spacing: 0; color: var(--muted); }
-.fields label.check-pick { flex: 1 0 100%; display: grid; grid-template-columns: auto 1fr; column-gap: 8px; row-gap: 2px; align-items: center; }
-.fields label.check-pick[hidden] { display: none; }
-.check-pick input { grid-row: 1; width: 16px; height: 16px; margin: 0; accent-color: var(--red); }
-.check-pick small { grid-column: 2; }
+.fields label .field-note { max-width: 320px; }
 .step .btn { align-self: flex-start; }
 .step-warn { list-style: none; margin: 0; padding: 8px 10px; display: grid; gap: 3px; font-size: 12px; color: #7a4f0e;
   background: #fdf3e2; border-left: 3px solid var(--amber); border-radius: var(--radius); }

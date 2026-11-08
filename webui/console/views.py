@@ -8,8 +8,6 @@ from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_POST
 
-from congestion_nl import features
-
 from . import charts, data, jobs
 
 ASSETS = Path(__file__).parent / "static" / "console"
@@ -66,7 +64,7 @@ def forecast(request):
         previous=days[days.index(day) + 1] if days.index(day) + 1 < len(days) else None,
         next=days[days.index(day) - 1] if days.index(day) > 0 else None,
         issued=pd.Timestamp(rows["issued_at"].max()).tz_convert("Europe/Amsterdam") if len(rows) else None,
-        with_market_estimator=bool(len(rows)) and str(rows.loc[rows["issued_at"].idxmax(), "model_version"]).endswith(("+market_estimator", "+forecaster")),
+        with_sdac_forecaster=bool(len(rows)) and str(rows.loc[rows["issued_at"].idxmax(), "model_version"]).endswith(("+sdac_forecaster", "+market_estimator", "+forecaster")),
         active=len(rows),
         alerts=int(counts.get("alert", 0)),
         vetoed=int(counts.get("vetoed", 0)),
@@ -201,21 +199,19 @@ def activity(request):
 def performance(request):
     """The test in 14-day windows: area-days and requests, actual against the flags the inspector kept."""
     context = _common(request, "performance")
-    tests = [{**h, "rolling": data.rolling_test(h["value"])} for h in data.hours()]
-    # before the day-ahead results, also the main model with the market estimator
-    main = f"{data.CONFIG.features.issue_hour:02d}:00"
-    tests += [{**h, "market_estimator": True, "note": f"{h['note']}, with the market estimator",
-               "rolling": data.rolling_test(h["value"], market_estimator=True)} for h in data.hours() if h["early"]]
+    # after the day-ahead results, and before them with the SDAC Forecaster
+    tests = [{**h, "rolling": data.rolling_test(h["value"])} for h in data.hours() if not h["early"]]
+    tests += [{**h, "sdac_forecaster": True, "note": "Before Day-Ahead, with the SDAC Forecaster",
+               "rolling": data.rolling_test(h["value"], sdac_forecaster=True)} for h in data.hours() if h["early"]]
     context.update(threshold=context["threshold"] or data.CONFIG.model.day_threshold, tests=tests,
-                   market_estimator=data.market_estimator_test())
+                   sdac_forecaster=data.sdac_forecaster_test())
     return render(request, "console/performance.html", context)
 
 
 def model(request):
-    """The trained model, its inspector and the settings."""
+    """The trained model, its inspector and its inputs."""
     context = _common(request, "model")
     bundle = data.bundle()
-    config = data.CONFIG
     if bundle:
         veto = bundle.get("inspector") or {}
         context.update(
@@ -227,19 +223,4 @@ def model(request):
             veto_share=veto["trained_correct"] / veto["trained_flags"] if veto else None,
             veto_inputs=len(veto.get("columns", [])),
         )
-    context["settings"] = [
-        ("History starts", f"{config.grid.start_date:%d %b %Y}"),
-        ("Grid cell size", f"{config.grid.cell_degrees}°"),
-        ("Directions", ", ".join(config.grid.directions)),
-        ("Forecast made at", ", ".join(f"{h['text']} ({h['note']})" for h in data.hours()) + " on the day before"),
-        ("Not used before the day-ahead results", ", ".join(features.MARKET_INPUTS)),
-        ("An area counts as active if it had a request in the last", f"{config.features.active_days} days"),
-        ("Flag an area from a chance of", f"{config.model.day_threshold}"),
-        ("Risk window starts at a chance of", f"{config.model.window_threshold}"),
-        ("Inspector removes flags below", f"{config.inspector.veto_cut:.0%} confidence"),
-        ("Flags never removed from a chance of", f"{config.inspector.keep_above}"),
-        ("Inspector also learns from chances from", f"{config.inspector.learn_from}"),
-        ("Inspector learns from days since", f"{config.inspector.start_date:%b %Y}"),
-        ("Validation looks at the last", f"{config.validation.window_days} days"),
-    ]
     return render(request, "console/model.html", context)

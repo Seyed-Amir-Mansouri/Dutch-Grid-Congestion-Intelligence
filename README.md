@@ -8,25 +8,24 @@ It comes with a small web app for running the steps and reading the results, and
 
 ## How a forecast is made
 
-There are two steps, and a third that helps with early forecasts.
+There are two steps, and a third that is used for early forecasts.
 
 1. **The predictor.** A gradient-boosted tree model (scikit-learn's `HistGradientBoostingClassifier`) gives a chance for each area and quarter-hour. It was trained on history from 1 April 2024. It uses 78 facts: the day-ahead market, the weather around the area, the area's own request history, notices from the grid operator, and the calendar.
 2. **The inspector.** A second, smaller model looks at every flag the predictor raises and removes the ones that look wrong. It learns from past flags that were scored by a model that had not seen those days. It removes a flag when it is less than 50% sure the flag is right, unless the predictor's own score is already 0.45 or higher.
-3. **The market estimator.** See the next section.
+3. **The SDAC Forecaster.** See the next section.
 
 The tool only uses what was known when the forecast is made. Training stops two days before the day being forecast, because that is the last day whose requests are complete. A past day only counts requests that were announced before the issue time.
 
 ### Before and after the day-ahead results
 
-The day-ahead price, net position and wind and solar forecasts come out around 13:00 on the day before. So there are two ways to issue a forecast, and each has its own model:
+The day-ahead price, net position and wind and solar forecasts come out around 13:00 on the day before. So there are two ways to issue a forecast:
 
 | Option | Issue time | What it uses |
 | --- | --- | --- |
 | After Day-Ahead | 14:00 | Everything, including the day-ahead results. 78 facts. |
-| Before Day-Ahead | 11:00 | The same, without those five market facts (price, net position, wind, solar and residual load). 73 facts. |
-| Before Day-Ahead with the market estimator | 11:00 | The 14:00 model, with the five market facts replaced by estimates. |
+| Before Day-Ahead, with the SDAC Forecaster | 11:00 | The same 14:00 model, with the five market facts (price, net position, wind, solar and residual load) forecast by the SDAC Forecaster. |
 
-The market estimator is a set of small models, one each for price, net position, wind and solar. It works from the weather forecast, the load forecast, the calendar and the values of the day before and a week before. It is retrained on all earlier days each time it runs, so it has no model file. Residual load is then the load forecast minus the estimated wind and solar.
+The SDAC Forecaster forecasts the day-ahead market inputs before they are published. It is a set of small models, one each for price, net position, wind and solar. It works from the weather forecast, the load forecast, the calendar and the values of the day before and a week before. It is retrained on all earlier days each time it runs, so it has no model file. Residual load is then the load forecast minus the forecast wind and solar.
 
 ## How well it works
 
@@ -35,10 +34,9 @@ The numbers below come from a test on 42 days (20 September to 31 October 2026).
 | Option | Flagged | Right | Wrong | Missed | Requests in flagged areas |
 | --- | --- | --- | --- | --- | --- |
 | After Day-Ahead (14:00) | 41 | 37 | 4 | 31 | 109 |
-| Before Day-Ahead (11:00) | 35 | 30 | 5 | 38 | 96 |
-| Before Day-Ahead with the market estimator | 36 | 32 | 4 | 36 | 101 |
+| Before Day-Ahead with the SDAC Forecaster | 36 | 32 | 4 | 36 | 101 |
 
-The market estimator helps overall but is weaker in the first two weeks of the test. How well it guesses the market values (correlation with the real values over the 42 days, where 1 is a perfect match): price 0.86, net position 0.39, wind 0.97, solar 0.98, residual load 0.98. Net position is the weak one.
+The SDAC Forecaster is weaker in the first two weeks of the test. How well it forecasts the market values (correlation with the real values over the 42 days, where 1 is a perfect match): price 0.86, net position 0.39, wind 0.97, solar 0.98, residual load 0.98. Net position is the weak one.
 
 The results are also on the Performance page of the app, split into 14-day windows. Most of the misses are areas that start up again after a few quiet days, and Enexis notices are the inspector's most useful input.
 
@@ -56,7 +54,7 @@ The pages:
 
 The steps on the Operations page:
 
-- **Daily forecast run.** Updates GOPACS, weather and market data, then makes the forecast for the day you pick. This is the one to use every day. Choose Before or After Day-Ahead. With Before you can tick "Use the market estimator".
+- **Daily forecast run.** Updates GOPACS, weather and market data, then makes the forecast for the day you pick. This is the one to use every day. Choose After Day-Ahead, or Before Day-Ahead with the SDAC Forecaster.
 - **Update GOPACS, Update weather, Update market data.** Download new data, starting from the last day you already have. Market data needs an ENTSO-E key (see Setup).
 - **Locate areas.** Finds each GOPACS area on the map and gives it a weather grid cell. Needed when new areas appear.
 - **Retrain model.** Trains the predictor and the inspector again on all complete days. It takes about half an hour.
@@ -91,14 +89,14 @@ fetch-entsoe --start D1 --end D2      prices, net position and forecasts
 fetch-drive [--missing]               the shared zip from Drive
 locate                                find the areas on the map
 train [--issue-hour 11]               train the predictor and the inspector
-estimate-market --start D1 [--end D2] estimate the day-ahead values for those days
-predict --date D [--issue-hour 11 [--market-estimator]]
-rolling-test --start D1 --end D2 [--issue-hour 11 [--market-estimator]]
+forecast-sdac --start D1 [--end D2] estimate the day-ahead values for those days
+predict --date D [--issue-hour 11 [--sdac-forecaster]]
+rolling-test --start D1 --end D2 [--issue-hour 11 [--sdac-forecaster]]
 validate [--as-of D]
 demo --start D --days N               made-up input files for trying the tool out
 ```
 
-`predict` writes one row per area to `outputs/area_predictions.csv` and one row per quarter-hour to `outputs/predictions.csv`, and prints the flagged areas with their risk window. The risk window runs from the first to the last quarter-hour with a chance of 0.1 or more. `rolling-test` is the test described above. It takes about an hour for 42 days and uses several GB of memory, so run one at a time.
+`predict` writes one row per area to `outputs/area_predictions.csv` and one row per quarter-hour to `outputs/predictions.csv`, and prints the flagged areas with their risk window. The risk window runs from the first to the last quarter-hour with a chance of 0.1 or more. The web app only offers the two options above. The 11:00 model without any market facts is still in the command line (`train --issue-hour 11`, then `predict --issue-hour 11` without `--sdac-forecaster`), but it is not shown in the app. `rolling-test` is the test described above. It takes about an hour for 42 days and uses several GB of memory, so run one at a time.
 
 `validate` marks each past forecast as right or wrong once the day is complete. It reports the counts of flagged, right, wrong and missed area-days, precision and recall, and how much better the model is than guessing the usual rate. If recent skill falls below the limit in `config.toml`, the command exits with status 2.
 

@@ -21,12 +21,12 @@ STAGES = {
     "train": ("Train", "Predictor and inspector"),
     "predict": ("Forecast", "Check every area, then the inspector"),
     "validate": ("Validate", "Compare with real requests"),
-    "estimate-market": ("Market estimator", "Day-ahead price, wind and solar"),
+    "forecast-sdac": ("SDAC Forecaster", "Day-ahead price, wind and solar"),
 }
 # short stage names for the files a Drive download replaces
 DRIVE_STAGES = {"gopacs": "Requests", "notices": "Notices", "sdac": "Market", "forecasts": "Forecasts",
                 "weather": "Weather", "locations": "Locations", "model": "Model", "inspector_history": "Inspector",
-                "walk_forward": "Test", "walk_forward_market_estimator": "Test with market estimator", "bundle": "All files"}
+                "walk_forward": "Test", "walk_forward_sdac_forecaster": "Test with SDAC Forecaster", "bundle": "All files"}
 PROGRESS = re.compile(r"progress: (\d+)%")
 # files the steps read: a label and the step that makes the file, or None for reference files
 FILES = {
@@ -79,14 +79,11 @@ def steps() -> list[dict]:
     today = _today()
     tomorrow = today + timedelta(days=1)
     forecast_days = [d.strftime("%Y-%m-%d") for d in data.forecast_days()]
-    options = [{**o, "text": o["note"], "note": f"Issued at {o['text']}"} for o in data.hours()]
-    hour = {"name": "hour", "label": "Issued at", "type": "select", "options": options}
-    # offered only for an issue hour before the day-ahead results
-    use = {"name": "market_estimator", "label": "Use the market estimator", "type": "check", "note": ""}
+    hour = {"name": "hour", "label": "Forecast", "type": "select", "options": data.issue_options()}
     found = [
         {"key": "daily", "title": "Daily forecast run", "kind": "chain", "lead": True,
          "text": "Updates the GOPACS, weather and market data, then makes the forecast for the day you pick. This is the step to use every day.",
-         "fields": [{"name": "date", "label": "Delivery day", "type": "date", "value": tomorrow}, hour, use]},
+         "fields": [{"name": "date", "label": "Delivery day", "type": "date", "value": tomorrow}, hour]},
         {"key": "gopacs", "title": "Update GOPACS", "kind": "data",
          "text": "Downloads the new congestion requests and transport restriction notices from GOPACS.", "fields": []},
         {"key": "weather", "title": "Update weather", "kind": "data",
@@ -99,11 +96,11 @@ def steps() -> list[dict]:
         {"key": "locate", "title": "Locate areas", "kind": "model",
          "text": "Finds each GOPACS area on the map and gives it a weather grid cell. Run it when new areas show up.", "fields": []},
         {"key": "train", "title": "Retrain model", "kind": "model",
-         "text": "Trains the predictor and the inspector again on all days that are complete. Takes about half an hour.", "fields": [hour]},
+         "text": "Trains the predictor and the inspector again on all days that are complete. Takes about half an hour.", "fields": []},
         {"key": "predict", "title": "Issue forecast", "kind": "model",
          "text": "Makes the forecast again for a day that already has one, without downloading anything. It is fast and works without internet, for example to compare the Before and After Day-Ahead forecasts.",
          "fields": [{"name": "date", "label": "Delivery day", "type": "days",
-                     "options": forecast_days}, hour, use]},
+                     "options": forecast_days}, hour]},
         {"key": "validate", "title": "Validate", "kind": "model",
          "text": "Compares past forecasts with the requests that really came and saves the result.",
          "fields": [{"name": "as_of", "label": "As of", "type": "days", "options": forecast_days}]},
@@ -158,13 +155,13 @@ def drive_ready() -> bool:
 def commands(key: str, form: dict) -> list[list[str]]:
     """The command lines for a step, from the submitted form."""
     day = lambda name: datetime.strptime(form[name], "%Y-%m-%d").strftime("%Y-%m-%d")
-    # the issue hour as a checked number, for the steps that ask for it
-    at = lambda: ["--issue-hour", str(int(form["hour"]))] if form.get("hour") else []
-    # the market estimator only applies before the day-ahead results
-    early = lambda: form.get("market_estimator") and form.get("hour") and int(form["hour"]) < _market_hour()
-    use = lambda: [*at(), "--market-estimator"] if early() else at()
-    # with the market estimator, its own stage first
-    market = lambda first, last: [["estimate-market", "--start", first, "--end", last]] if early() else []
+    # the choice is an issue hour, with "-sdac" for the forecast before the day-ahead results
+    choice = str(form.get("hour", ""))
+    at = lambda: ["--issue-hour", str(int(choice.split("-")[0]))] if choice else []
+    sdac = choice.endswith("-sdac")
+    use = lambda: [*at(), "--sdac-forecaster"] if sdac else at()
+    # with the SDAC Forecaster, its own stage first
+    market = lambda first, last: [["forecast-sdac", "--start", first, "--end", last]] if sdac else []
     single = {
         "gopacs": lambda: [["fetch-gopacs"]],
         "weather": lambda: [["fetch-weather", "--start", _data().weather_start(_today(), 2),
@@ -172,7 +169,7 @@ def commands(key: str, form: dict) -> list[list[str]]:
         "entsoe": lambda: [["fetch-entsoe", "--start", _data().market_start(_today()),
                             "--end", str(_today() + timedelta(days=2))]],
         "locate": lambda: [["locate"]],
-        "train": lambda: [["train", *at()]],
+        "train": lambda: [["train"]],
         "predict": lambda: [*market(day("date"), day("date")), ["predict", "--date", day("date"), *use()]],
         "validate": lambda: [["validate", "--as-of", day("as_of")]],
     }
@@ -202,12 +199,6 @@ def _data():
     from . import data
 
     return data
-
-
-def _market_hour() -> int:
-    from . import data
-
-    return data.CONFIG.features.market_hour
 
 
 def _meta_path(job_id: str):
@@ -346,7 +337,7 @@ def clear(with_model: bool) -> int:
     if with_model:
         # not listed in the Files panel, but made by training like the model
         files += [data.file_path(f"inspector_history{'' if i == 0 else f'_{h}'}") for i, h in enumerate(data.CONFIG.hours)]
-        files.append(data.model_dir() / inspector.MARKET_ESTIMATOR_HISTORY)
+        files.append(data.model_dir() / inspector.SDAC_FORECASTER_HISTORY)
     if settings.RUNS_DIR.exists():
         files += [file for kind in ("*.json", "*.tmp", "*.log") for file in settings.RUNS_DIR.glob(kind)]
     with _lock:

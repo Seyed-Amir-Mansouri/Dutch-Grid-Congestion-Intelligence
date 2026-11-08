@@ -3,7 +3,7 @@
 {% block title %}Forecast{% endblock %}
 {% block eyebrow %}Day-ahead congestion forecast{% endblock %}
 {% block heading %}{% if day %}{{ day|date:"l j F Y" }}{% else %}No forecast yet{% endif %}{% endblock %}
-{% block lede %}{% if day %}Made on {{ issued|date:"j M Y, H:i" }}{% if with_market_estimator %}, using the market estimator for the market values{% endif %}. An area is flagged when its chance of a request reaches {{ threshold }}. The inspector then removes flags that look wrong.{% else %}Start the Daily forecast run on the Operations page to make the first forecast.{% endif %}{% endblock %}
+{% block lede %}{% if day %}Made on {{ issued|date:"j M Y, H:i" }}{% if with_sdac_forecaster %}, using the SDAC Forecaster for the market values{% endif %}. An area is flagged when its chance of a request reaches {{ threshold }}. The inspector then removes flags that look wrong.{% else %}Start the Daily forecast run on the Operations page to make the first forecast.{% endif %}{% endblock %}
 {% block hero_side %}{% if days %}
 <div class="daypick">
   {% if previous %}<a class="btn btn-ghost" href="?day={{ previous|date:'Y-m-d' }}" aria-label="Previous day">‹</a>{% else %}<span class="btn btn-ghost off">‹</span>{% endif %}

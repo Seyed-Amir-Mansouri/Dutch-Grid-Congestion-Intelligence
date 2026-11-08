@@ -22,17 +22,13 @@
   {% endif %}
 </div>
 
-<div class="grid-2">
+<div>
   <section class="panel">
     <header class="panel-head"><h2>Predictor inputs</h2></header>
     {% for name, cols in groups %}
       <div class="feat-group"><h4>{{ name }} <span class="muted">{{ cols|length }}</span></h4>
         <div class="chips">{% for c in cols %}<code class="chip">{{ c }}</code>{% endfor %}</div></div>
     {% endfor %}
-  </section>
-  <section class="panel">
-    <header class="panel-head"><h2>Settings</h2><span class="muted">config.toml</span></header>
-    <table class="table compact"><tbody>{% for k, v in settings %}<tr><td>{{ k }}</td><td class="mono">{{ v }}</td></tr>{% endfor %}</tbody></table>
   </section>
 </div>
 {% else %}

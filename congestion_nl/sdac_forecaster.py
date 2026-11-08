@@ -36,7 +36,7 @@ def weather_means(weather: pd.DataFrame) -> pd.DataFrame:
 
 
 def table(sdac: pd.DataFrame, forecasts: pd.DataFrame, weather: pd.DataFrame, day: pd.Timestamp) -> pd.DataFrame:
-    """Every quarter-hour up to day with the targets where known and the market estimator's inputs."""
+    """Every quarter-hour up to day with the targets where known and the SDAC Forecaster's inputs."""
     t = sdac.merge(forecasts, on=schemas.MARKET_KEY, how="outer")
     t = t[t["delivery_date"] < day]
     grid = pd.DataFrame({"delivery_date": day, "quarter": range(96)})
@@ -62,7 +62,7 @@ def table(sdac: pd.DataFrame, forecasts: pd.DataFrame, weather: pd.DataFrame, da
 
 
 def inputs_for(target: str) -> list[str]:
-    """The market estimator's inputs for one target."""
+    """The SDAC Forecaster's inputs for one target."""
     return CALENDAR + ["load_forecast_mw"] + WEATHER + [f"{target}_d1", f"{target}_d7", f"{target}_d1_mean"]
 
 
@@ -76,7 +76,7 @@ def estimate(sdac: pd.DataFrame, forecasts: pd.DataFrame, weather: pd.DataFrame,
     t = table(sdac, forecasts, weather, day)
     train, rows = t[t["delivery_date"] < day], t[t["delivery_date"] == day]
     if rows[WEATHER].isna().all().all():
-        raise ValueError(f"No weather forecast for {day:%Y-%m-%d}: the market estimator needs it")
+        raise ValueError(f"No weather forecast for {day:%Y-%m-%d}: the SDAC Forecaster needs it")
     out = rows[schemas.MARKET_KEY].reset_index(drop=True)
     for target in TARGETS:
         columns = inputs_for(target)
@@ -94,7 +94,7 @@ def run(config, days, sdac: pd.DataFrame, forecasts: pd.DataFrame, weather: pd.D
                f"{found[-1]['wind_forecast_mw'].max():.0f} MW, solar up to {found[-1]['solar_forecast_mw'].max():.0f} MW",
                flush=True)
     found = pd.concat(found, ignore_index=True)
-    path = config.resolve(config.paths.market_estimates)
+    path = config.resolve(config.paths.sdac_forecasts)
     old = saved(config)
     old = old[~old["delivery_date"].isin(found["delivery_date"])]
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -104,7 +104,7 @@ def run(config, days, sdac: pd.DataFrame, forecasts: pd.DataFrame, weather: pd.D
 
 def saved(config) -> pd.DataFrame:
     """The estimates saved so far."""
-    path = config.resolve(config.paths.market_estimates)
+    path = config.resolve(config.paths.sdac_forecasts)
     if not path.exists():
         return pd.DataFrame(columns=schemas.MARKET_KEY + TARGETS)
     return pd.read_csv(path, parse_dates=["delivery_date"])

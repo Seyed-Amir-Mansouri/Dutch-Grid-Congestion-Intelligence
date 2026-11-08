@@ -29,7 +29,7 @@ class Paths:
     predictions: Path
     area_predictions: Path
     validation: Path
-    market_estimates: Path = Path("outputs/market_estimates.csv")
+    sdac_forecasts: Path = Path("outputs/sdac_forecasts.csv")
 
 
 @dataclass(frozen=True)
@@ -49,7 +49,7 @@ class Features:
     issue_hours: tuple[int, ...] = ()
     market_hour: int = 0
     # before the day-ahead results, the main model with the market inputs forecast for the delivery day
-    estimate_market: bool = False
+    forecast_sdac: bool = False
 
 
 @dataclass(frozen=True)
@@ -93,17 +93,17 @@ class Config:
         """The issue hours a forecast can be made at, the configured one first."""
         return tuple(dict.fromkeys((self.features.issue_hour, *self.features.issue_hours)))
 
-    def at_hour(self, hour: int | None, market_estimator: bool = False) -> Config:
+    def at_hour(self, hour: int | None, sdac_forecaster: bool = False) -> Config:
         """This config for a forecast issued at another hour, with its own model folder.
 
-        With the market estimator, an hour before the day-ahead results keeps the main model and its folder.
+        With the SDAC Forecaster, an hour before the day-ahead results keeps the main model and its folder.
         """
-        if market_estimator:
+        if sdac_forecaster:
             if hour not in self.hours or hour >= self.features.market_hour:
-                raise ValueError(f"the market estimator is for issue hours before {self.features.market_hour}:00")
+                raise ValueError(f"the SDAC Forecaster is for issue hours before {self.features.market_hour}:00")
             if self.features.issue_hour < self.features.market_hour:
-                raise ValueError("the market estimator needs a main model issued after the day-ahead results")
-            return replace(self, features=replace(self.features, issue_hour=hour, estimate_market=True))
+                raise ValueError("the SDAC Forecaster needs a main model issued after the day-ahead results")
+            return replace(self, features=replace(self.features, issue_hour=hour, forecast_sdac=True))
         if hour is None or hour == self.features.issue_hour:
             return self
         if hour not in self.hours:

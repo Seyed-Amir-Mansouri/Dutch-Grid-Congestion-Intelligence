@@ -26,15 +26,15 @@
     </tbody>
   </table></div>
   {% else %}<p class="muted pad">Not available yet. Use <b>Download from Drive</b> on the Operations page.</p>{% endif %}
-  {% if t.market_estimator and market_estimator %}
-  <header class="panel-head sub"><h2>The market estimator <small class="muted">run {{ market_estimator.made|date:"j M, H:i" }}</small></h2></header>
-  <p class="muted pad">Before the day-ahead results are out, the market estimator guesses the price, net position, wind and solar values. The table shows how closely its guesses follow the real values: 1 is a perfect match and 0 means no link.</p>
+  {% if t.sdac_forecaster and sdac_forecaster %}
+  <header class="panel-head sub"><h2>The SDAC Forecaster <small class="muted">run {{ sdac_forecaster.made|date:"j M, H:i" }}</small></h2></header>
+  <p class="muted pad">Before the day-ahead results are out, the SDAC Forecaster guesses the price, net position, wind and solar values. The table shows how closely its guesses follow the real values: 1 is a perfect match and 0 means no link.</p>
   <div class="table-scroll"><table class="table">
     <thead>
-      <tr><th>Window</th>{% for r in market_estimator.blocks.0.rows %}<th class="num">{{ r.label }}</th>{% endfor %}</tr>
+      <tr><th>Window</th>{% for r in sdac_forecaster.blocks.0.rows %}<th class="num">{{ r.label }}</th>{% endfor %}</tr>
     </thead>
     <tbody>
-      {% for b in market_estimator.blocks %}
+      {% for b in sdac_forecaster.blocks %}
       <tr{% if b.total %} class="total"{% endif %}>
         <td>{% if b.total %}<b>All {{ b.days }} days</b>{% else %}{{ b.start|date:"j M" }} – {{ b.end|date:"j M" }}{% endif %}</td>
         {% for r in b.rows %}<td class="num">{{ r.corr|floatformat:2 }}</td>{% endfor %}</tr>

@@ -35,6 +35,19 @@ def hours() -> list[dict]:
             for h in CONFIG.hours]
 
 
+def issue_options() -> list[dict]:
+    """The two ways to issue a forecast: after the day-ahead results, or before them with the SDAC Forecaster."""
+    out = []
+    for h in CONFIG.hours:
+        if h >= CONFIG.features.market_hour:
+            out.append({"value": str(h), "text": "After Day-Ahead Market", "note": f"Issued at {h:02d}:00"})
+        else:
+            out.append({"value": f"{h}-sdac", "text": "Before Day-Ahead Market",
+                        "note": f"Issued at {h:02d}:00. This model forecasts the day-ahead market inputs "
+                                "(price, net position, wind and solar), because the real ones are not out yet."})
+    return out
+
+
 def _cached(name: str, files: list[Path], build):
     """Return build(), recomputed only when one of the files changes."""
     stamp = tuple(f.stat().st_mtime if f.exists() else None for f in files)
@@ -126,9 +139,9 @@ def forecast(day: pd.Timestamp) -> pd.DataFrame:
     return rows.sort_values("peak_probability", ascending=False).reset_index(drop=True)
 
 
-def rolling_test(hour: int | None = None, market_estimator: bool = False) -> dict | None:
+def rolling_test(hour: int | None = None, sdac_forecaster: bool = False) -> dict | None:
     """The test of an issue hour per 14-day window: area-days and requests, actual against the kept flags."""
-    file = model_dir(hour) / (inspector.MARKET_ESTIMATOR_TEST if market_estimator else inspector.TEST_FILE)
+    file = model_dir(hour) / (inspector.SDAC_FORECASTER_TEST if sdac_forecaster else inspector.TEST_FILE)
     if not file.exists():
         return None
     scores = pd.read_csv(file, parse_dates=["delivery_date"])
@@ -163,15 +176,15 @@ def rolling_test(hour: int | None = None, market_estimator: bool = False) -> dic
             "made": pd.Timestamp(file.stat().st_mtime, unit="s", tz="UTC").tz_convert("Europe/Amsterdam")}
 
 
-MARKET_ESTIMATOR_FILE = "market_estimator_test.csv"
-MARKET_ESTIMATOR_INPUTS = [("price_eur_mwh", "Day-ahead price"), ("net_position_mw", "Net position"),
+SDAC_FORECASTER_FILE = "sdac_forecaster_test.csv"
+SDAC_FORECASTER_INPUTS = [("price_eur_mwh", "Day-ahead price"), ("net_position_mw", "Net position"),
                      ("wind_forecast_mw", "Wind forecast"), ("solar_forecast_mw", "Solar forecast"),
                      ("residual_load_mw", "Residual load")]
 
 
-def market_estimator_test() -> dict | None:
-    """How closely the market estimator's day-ahead inputs follow the real ones, per 14-day window."""
-    file = model_dir() / MARKET_ESTIMATOR_FILE
+def sdac_forecaster_test() -> dict | None:
+    """How closely the SDAC Forecaster's day-ahead inputs follow the real ones, per 14-day window."""
+    file = model_dir() / SDAC_FORECASTER_FILE
     if not file.exists():
         return None
     x = pd.read_csv(file, parse_dates=["delivery_date"])
@@ -182,7 +195,7 @@ def market_estimator_test() -> dict | None:
 
     def block(first: pd.Timestamp, last: pd.Timestamp) -> dict:
         part = x[x["delivery_date"].between(first, last)]
-        rows = [{"label": label, "corr": part[name].corr(part[f"{name}_fc"])} for name, label in MARKET_ESTIMATOR_INPUTS]
+        rows = [{"label": label, "corr": part[name].corr(part[f"{name}_fc"])} for name, label in SDAC_FORECASTER_INPUTS]
         return {"start": first, "end": last, "days": part["delivery_date"].nunique(), "rows": rows}
 
     window = pd.Timedelta(days=CONFIG.validation.window_days)
@@ -262,14 +275,12 @@ FILE_GROUPS = [
     ("Data", [("gopacs", "GOPACS requests", "Update GOPACS"), ("notices", "Transport restriction notices", "Update GOPACS"),
               ("weather", "Weather forecasts", "Update weather"), ("sdac", "Day-ahead prices", "Update market data"),
               ("forecasts", "Load, wind and solar forecasts", "Update market data"), ("locations", "Area locations", "Locate areas")]),
-    ("Model", [(f"{name}{suffix}", f"{label}{when}", maker) for suffix, when in
-               [("", "")] + [(f"_{h}", f", {h:02d}:00") for h in CONFIG.hours[1:]]
-               for name, label, maker in (("model", "Trained model", "Retrain model"), ("walk_forward", "Test (14-day windows)", "Download from Drive"))]
-              + [(f"walk_forward_market_estimator_{h}", f"Test (14-day windows), {h:02d}:00 with the market estimator", "Download from Drive")
+    ("Model", [("model", "Trained model", "Retrain model"), ("walk_forward", "Test (14-day windows)", "Download from Drive")]
+              + [(f"walk_forward_sdac_forecaster_{h}", f"Test (14-day windows), {h:02d}:00 with the SDAC Forecaster", "Download from Drive")
                  for h in CONFIG.hours if h < CONFIG.features.market_hour]),
     ("Outputs", [("predictions", "Forecasts per quarter-hour", "Issue forecast"),
                  ("area_predictions", "Saved forecasts", "Issue forecast"), ("validation", "Validation history", "Validate"),
-                 ("market_estimates", "Market estimator's values", "Daily forecast run with the market estimator")]),
+                 ("sdac_forecasts", "SDAC Forecaster's values", "Daily forecast run with the SDAC Forecaster")]),
 ]
 
 
