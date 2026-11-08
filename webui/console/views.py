@@ -206,7 +206,8 @@ def performance(request):
     main = f"{data.CONFIG.features.issue_hour:02d}:00"
     tests += [{**h, "forecaster": True, "note": f"{h['note']} · {main} model with the forecaster",
                "rolling": data.rolling_test(h["value"], forecaster=True)} for h in data.hours() if h["early"]]
-    context.update(threshold=context["threshold"] or data.CONFIG.model.day_threshold, tests=tests)
+    context.update(threshold=context["threshold"] or data.CONFIG.model.day_threshold, tests=tests,
+                   forecaster=data.forecaster_test())
     return render(request, "console/performance.html", context)
 
 

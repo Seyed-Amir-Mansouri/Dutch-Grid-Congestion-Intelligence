@@ -163,6 +163,36 @@ def rolling_test(hour: int | None = None, forecaster: bool = False) -> dict | No
             "made": pd.Timestamp(file.stat().st_mtime, unit="s", tz="UTC").tz_convert("Europe/Amsterdam")}
 
 
+FORECASTER_FILE = "forecaster_test.csv"
+FORECASTER_INPUTS = [("price_eur_mwh", "Day-ahead price"), ("net_position_mw", "Net position"),
+                     ("wind_forecast_mw", "Wind forecast"), ("solar_forecast_mw", "Solar forecast"),
+                     ("residual_load_mw", "Residual load")]
+
+
+def forecaster_test() -> dict | None:
+    """How closely the forecaster's day-ahead inputs follow the real ones, per 14-day window."""
+    file = model_dir() / FORECASTER_FILE
+    if not file.exists():
+        return None
+    x = pd.read_csv(file, parse_dates=["delivery_date"])
+    # residual load is the load forecast less wind and solar
+    for suffix in ("", "_fc"):
+        x[f"residual_load_mw{suffix}"] = x["load_forecast_mw"] - x[f"wind_forecast_mw{suffix}"] - x[f"solar_forecast_mw{suffix}"]
+    start, end = x["delivery_date"].min(), x["delivery_date"].max()
+
+    def block(first: pd.Timestamp, last: pd.Timestamp) -> dict:
+        part = x[x["delivery_date"].between(first, last)]
+        rows = [{"label": label, "corr": part[name].corr(part[f"{name}_fc"])} for name, label in FORECASTER_INPUTS]
+        return {"start": first, "end": last, "days": part["delivery_date"].nunique(), "rows": rows}
+
+    window = pd.Timedelta(days=CONFIG.validation.window_days)
+    blocks = [block(first, min(first + window - pd.Timedelta(days=1), end)) for first in pd.date_range(start, end, freq=window)]
+    if len(blocks) > 1:
+        blocks.append({**block(start, end), "total": True})
+    return {"blocks": blocks, "start": start, "end": end, "count": x["delivery_date"].nunique(),
+            "made": pd.Timestamp(file.stat().st_mtime, unit="s", tz="UTC").tz_convert("Europe/Amsterdam")}
+
+
 def notices(limit: int = 12) -> pd.DataFrame:
     """The most recent transport-restriction notices."""
     file = path("notices")
