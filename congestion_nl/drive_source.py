@@ -15,6 +15,7 @@ DATA_FILES = ["gopacs", "notices", "sdac", "forecasts", "weather", "locations"]
 MODEL_FILES = ["model", "walk_forward", "inspector_history"]
 # the test with the SDAC Forecaster, for issue hours before the day-ahead results
 SDAC_FORECASTER_FILES = ["walk_forward_sdac_forecaster"]
+FORECASTER_TEST = "sdac_forecaster_test.csv"
 
 
 def file_id(link: str) -> str:
@@ -75,6 +76,8 @@ def bundle_names(config) -> dict[str, Path]:
         for key in MODEL_FILES + (SDAC_FORECASTER_FILES if hour < config.features.market_hour else []):
             path = target(config, f"{key}_{hour}")
             names[f"{path.stem}_{hour}{path.suffix}"] = path
+    # how well the SDAC Forecaster forecasts the market inputs, shown on the Performance page
+    names[FORECASTER_TEST] = config.resolve(config.paths.model_dir) / FORECASTER_TEST
     return names
 
 
