@@ -23,13 +23,8 @@
     </tbody>
   </table></div>
   {% else %}<p class="muted pad">Not available yet. Use <b>Download from Drive</b> on the Operations page.</p>{% endif %}
-</section>
-{% endwith %}{% endfor %}
-
-{% if forecaster %}
-<section class="panel">
-  <header class="panel-head"><h2>The forecaster <small class="muted">correlation of its day-ahead values with the real ones, 1 is perfect</small></h2>
-    <span class="muted">{{ forecaster.start|date:"j M" }}–{{ forecaster.end|date:"j M Y" }} · {{ forecaster.count }} days · run {{ forecaster.made|date:"j M, H:i" }}</span></header>
+  {% if t.forecaster and forecaster %}
+  <header class="panel-head sub"><h2>The forecaster <small class="muted">correlation of its day-ahead values with the real ones, 1 is perfect · run {{ forecaster.made|date:"j M, H:i" }}</small></h2></header>
   <div class="table-scroll"><table class="table">
     <thead>
       <tr><th>Window</th>{% for r in forecaster.blocks.0.rows %}<th class="num">{{ r.label }}</th>{% endfor %}</tr>
@@ -42,6 +37,7 @@
       {% endfor %}
     </tbody>
   </table></div>
+  {% endif %}
 </section>
-{% endif %}
+{% endwith %}{% endfor %}
 {% endblock %}
