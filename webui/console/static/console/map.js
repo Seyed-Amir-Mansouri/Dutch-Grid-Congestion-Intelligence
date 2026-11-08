@@ -79,6 +79,8 @@
     marker.getElement().querySelector(".lamp").classList.add("is-selected");
     marker.setZIndexOffset(100000);
     if (fly) map.flyTo(marker.getLatLng(), Math.max(map.getZoom(), 10), { duration: 0.9 });
+    // only the clicked area keeps its detail box
+    markers.forEach((other) => other.closeTooltip());
     marker.openTooltip();
     const row = document.querySelector(`.row-pick[data-point="${id}"]`);
     if (row) {
