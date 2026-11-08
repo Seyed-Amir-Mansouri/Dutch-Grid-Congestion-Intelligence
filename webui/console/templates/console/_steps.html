@@ -11,6 +11,9 @@
       {% for f in s.fields %}{% if f.type == 'select' %}<label><span>{{ f.label }}</span><select name="{{ f.name }}" class="hour-pick">
         {% for o in f.options %}<option value="{{ o.value }}" data-note="{{ o.note }}"{% if o.early %} data-early{% endif %}>{{ o.text }}</option>{% endfor %}
       </select><small class="field-note">{{ f.options.0.note }}</small></label>
+      {% elif f.type == 'days' %}<label><span>{{ f.label }}</span><select name="{{ f.name }}" class="day-pick">
+        {% for o in f.options %}<option value="{{ o }}">{{ o }}</option>{% endfor %}
+      </select></label>
       {% elif f.type == 'check' %}<label class="check-pick" hidden><span>{{ f.label }}</span>
         <span class="check-row"><input type="checkbox" name="{{ f.name }}" value="1"><small class="field-note">{{ f.note }}</small></span></label>
       {% else %}<label><span>{{ f.label }}</span><input type="{{ f.type }}" name="{{ f.name }}" value="{{ f.value|date:'Y-m-d'|default:f.value }}" required></label>{% endif %}{% endfor %}

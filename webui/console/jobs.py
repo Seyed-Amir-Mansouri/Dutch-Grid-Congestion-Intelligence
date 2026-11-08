@@ -106,7 +106,8 @@ def steps() -> list[dict]:
          "text": "Train the predictor and the inspector on all settled history. Takes about half an hour.", "fields": [hour]},
         {"key": "predict", "title": "Issue forecast", "kind": "model",
          "text": "Score every active area for one delivery day and log it in the forecast ledger.",
-         "fields": [{"name": "date", "label": "Delivery day", "type": "date", "value": tomorrow}, hour, use]},
+         "fields": [{"name": "date", "label": "Delivery day", "type": "days",
+                     "options": [d.strftime("%Y-%m-%d") for d in data.forecast_days()]}, hour, use]},
         {"key": "validate", "title": "Validate", "kind": "model",
          "text": "Score settled forecasts against GOPACS requests and append to the validation history.",
          "fields": [{"name": "as_of", "label": "As of", "type": "date", "value": today}]},
@@ -118,6 +119,8 @@ def steps() -> list[dict]:
     ]
     for step in found:
         step["missing"] = missing(step["key"])
+        if step["key"] == "predict" and not data.forecast_days():
+            step["missing"].append("No forecast yet: run Daily forecast run first")
     return found
 
 

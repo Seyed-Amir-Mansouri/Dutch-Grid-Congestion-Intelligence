@@ -121,7 +121,7 @@ code, .mono { font-family: var(--mono); font-size: 12.5px; }
   background-image: linear-gradient(45deg, transparent 50%, #fff 50%), linear-gradient(135deg, #fff 50%, transparent 50%);
   background-position: calc(100% - 18px) 16px, calc(100% - 13px) 16px; background-size: 5px 5px; background-repeat: no-repeat; }
 .daypick select option { color: var(--ink); }
-input[type=date], select.hour-pick { height: 36px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--radius); font: 13px var(--mono); color: var(--ink); background: #fafbfc; }
+input[type=date], select.hour-pick, select.day-pick { height: 36px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--radius); font: 13px var(--mono); color: var(--ink); background: #fafbfc; }
 input[type=date]:focus, select:focus, .btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
 
 /* tables */
