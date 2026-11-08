@@ -3,14 +3,15 @@
 {% block title %}Forecast{% endblock %}
 {% block eyebrow %}Day-ahead congestion forecast{% endblock %}
 {% block heading %}{% if day %}{{ day|date:"l j F Y" }}{% else %}No forecast yet{% endif %}{% endblock %}
-{% block lede %}{% if day %}Made on {{ issued|date:"j M Y, H:i" }}{% if with_sdac_forecaster %}, using the SDAC Forecaster for the market values{% endif %}. An area is flagged when its chance of a request reaches {{ threshold }}. The inspector then removes flags that look wrong.{% else %}Start the Daily forecast run on the Operations page to make the first forecast.{% endif %}{% endblock %}
+{% block lede %}{% if day %}Made on {{ issued|date:"j M Y, H:i" }}{% if run == "before" %}, before the day-ahead results, with the SDAC Forecaster forecasting the market values{% else %}, after the day-ahead results{% endif %}. An area is flagged when its chance of a request reaches {{ threshold }}. The inspector then removes flags that look wrong.{% else %}Start the Daily forecast run on the Operations page to make the first forecast.{% endif %}{% endblock %}
 {% block hero_side %}{% if days %}
+{% if runs %}<div class="runpick">{% for r in runs %}{% if r.on %}<a class="{% if r.value == run %}on{% endif %}" href="?day={{ day|date:'Y-m-d' }}&run={{ r.value }}">{{ r.label }}</a>{% else %}<span class="off">{{ r.label }}</span>{% endif %}{% endfor %}</div>{% endif %}
 <div class="daypick">
-  {% if previous %}<a class="btn btn-ghost" href="?day={{ previous|date:'Y-m-d' }}" aria-label="Previous day">‹</a>{% else %}<span class="btn btn-ghost off">‹</span>{% endif %}
-  <form method="get"><select name="day" onchange="this.form.submit()" aria-label="Delivery day">
+  {% if previous %}<a class="btn btn-ghost" href="?day={{ previous|date:'Y-m-d' }}&run={{ run }}" aria-label="Previous day">‹</a>{% else %}<span class="btn btn-ghost off">‹</span>{% endif %}
+  <form method="get"><input type="hidden" name="run" value="{{ run }}"><select name="day" onchange="this.form.submit()" aria-label="Delivery day">
     {% for d in days %}<option value="{{ d|date:'Y-m-d' }}" {% if d == day %}selected{% endif %}>{{ d|date:"D j M Y" }}</option>{% endfor %}
   </select></form>
-  {% if next %}<a class="btn btn-ghost" href="?day={{ next|date:'Y-m-d' }}" aria-label="Next day">›</a>{% else %}<span class="btn btn-ghost off">›</span>{% endif %}
+  {% if next %}<a class="btn btn-ghost" href="?day={{ next|date:'Y-m-d' }}&run={{ run }}" aria-label="Next day">›</a>{% else %}<span class="btn btn-ghost off">›</span>{% endif %}
 </div>{% endif %}{% endblock %}
 
 {% block content %}

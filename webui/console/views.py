@@ -44,7 +44,11 @@ def forecast(request):
     day = pd.Timestamp(chosen) if chosen else days[0]
     if day not in days:
         raise Http404("No forecast for that day")
-    rows = data.forecast(day)
+    kinds = data.forecast_kinds(day)
+    run = request.GET.get("run")
+    if run not in kinds:
+        run = kinds[0]
+    rows = data.forecast(day, run)
     records = [
         {**r, "peak_probability": float(r["peak_probability"]), "inspector_confidence": _number(r["inspector_confidence"])}
         for r in rows.to_dict("records")
@@ -64,7 +68,8 @@ def forecast(request):
         previous=days[days.index(day) + 1] if days.index(day) + 1 < len(days) else None,
         next=days[days.index(day) - 1] if days.index(day) > 0 else None,
         issued=pd.Timestamp(rows["issued_at"].max()).tz_convert("Europe/Amsterdam") if len(rows) else None,
-        with_sdac_forecaster=bool(len(rows)) and str(rows.loc[rows["issued_at"].idxmax(), "model_version"]).endswith(("+sdac_forecaster", "+market_estimator", "+forecaster")),
+        run=run,
+        runs=[{"value": k, "label": f"{'After' if k == 'after' else 'Before'} Day-Ahead", "on": k in kinds} for k in ("after", "before")],
         active=len(rows),
         alerts=int(counts.get("alert", 0)),
         vetoed=int(counts.get("vetoed", 0)),

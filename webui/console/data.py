@@ -123,10 +123,17 @@ def status_of(row) -> str:
     return "vetoed" if row["day_flag"] == 1 else "clear"
 
 
-def forecast(day: pd.Timestamp) -> pd.DataFrame:
-    """The latest forecast of each area for a day, with location, status and outcome when known."""
+def forecast_kinds(day: pd.Timestamp) -> list[str]:
+    """Which forecasts a day has: 'after' and 'before' the day-ahead results."""
     found = area_ledger()
-    rows = found[found["delivery_date"] == day].sort_values("issued_at")
+    here = set(found.loc[found["delivery_date"] == day, "kind"])
+    return [k for k in ("after", "before") if k in here]
+
+
+def forecast(day: pd.Timestamp, kind: str) -> pd.DataFrame:
+    """The latest forecast of one kind for each area of a day, with location, status and outcome when known."""
+    found = area_ledger()
+    rows = found[(found["delivery_date"] == day) & (found["kind"] == kind)].sort_values("issued_at")
     rows = rows.drop_duplicates(schemas.AREA_KEY, keep="last")
     rows = rows.merge(locations()[["area", "lat", "lon", "cell"]], on="area", how="left")
     rows["status"] = rows.apply(status_of, axis=1) if len(rows) else []

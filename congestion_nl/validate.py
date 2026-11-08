@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from . import metrics, schemas
+from . import ledger, metrics, schemas
 from .config import Config
 from .labels import area_day_labels, expand_quarters
 
@@ -28,8 +28,14 @@ def evaluate(
     events: pd.DataFrame,
     label_end: pd.Timestamp,
     as_of: pd.Timestamp,
+    kind: str | None = None,
 ) -> dict:
-    """Score settled area-day predictions overall and over a recent window, and check the skill alert."""
+    """Score settled area-day predictions overall and over a recent window, and check the skill alert.
+
+    With a kind ('after' or 'before' the day-ahead results) only the forecasts of that kind are scored.
+    """
+    if kind:
+        predictions = predictions[predictions["model_version"].map(ledger.kind_of) == kind]
     latest = latest_predictions(predictions, label_end)
     labelled = latest.merge(area_day_labels(latest, events), on=schemas.AREA_KEY, how="left")
 
@@ -43,6 +49,7 @@ def evaluate(
     skill = window["skill"]
     alert = bool(pd.notna(skill) and skill < config.validation.min_skill)
     return {
+        "kind": kind or "",
         "as_of": as_of.isoformat(),
         "label_end": label_end.date().isoformat(),
         "window_start": window_start.date().isoformat(),

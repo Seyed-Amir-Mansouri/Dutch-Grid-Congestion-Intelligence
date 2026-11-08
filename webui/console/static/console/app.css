@@ -195,6 +195,10 @@ input[type=date]:focus, select:focus, .btn:focus-visible { outline: 2px solid va
 .field-note { font: 400 11px var(--sans, inherit); text-transform: none; letter-spacing: 0; color: var(--muted); }
 .fields label .field-note { max-width: 320px; }
 .step .btn { align-self: flex-start; }
+.runpick { display: inline-flex; margin-bottom: 10px; border: 1px solid rgba(255,255,255,.3); border-radius: var(--radius); overflow: hidden; }
+.runpick a, .runpick span { padding: 7px 14px; font: 500 12px var(--cond); letter-spacing: 1px; text-transform: uppercase; color: #c3cad9; text-decoration: none; }
+.runpick a.on { background: #fff; color: var(--navy); }
+.runpick span.off { opacity: .4; }
 .step-warn { list-style: none; margin: 0; padding: 8px 10px; display: grid; gap: 3px; font-size: 12px; color: #7a4f0e;
   background: #fdf3e2; border-left: 3px solid var(--amber); border-radius: var(--radius); }
 .step-warn li::before { content: "⚠ "; }

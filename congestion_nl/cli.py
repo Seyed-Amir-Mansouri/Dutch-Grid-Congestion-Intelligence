@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 
 import pandas as pd
 
-from . import estimator, ledger, pipeline, synthetic, validate
+from . import estimator, features, ledger, pipeline, synthetic, validate
 from .config import DEFAULT_CONFIG, load_config
 
 
@@ -242,6 +242,8 @@ def cmd_predict(args: argparse.Namespace) -> None:
 
         sdac_forecaster.fill(dataset, sdac_forecaster.for_days(config, [day], inputs.sdac, inputs.forecasts, inputs.weather))
         bundle = {**bundle, "model_version": bundle["model_version"] + "+sdac_forecaster"}
+    elif features.before_market(config):
+        bundle = {**bundle, "model_version": bundle["model_version"] + "+before"}
     issued_at = datetime.fromisoformat(args.issued_at) if args.issued_at else None
     predictions = pipeline.predict_day(config, bundle, dataset, day, issued_at)
 
@@ -268,12 +270,18 @@ def cmd_validate(args: argparse.Namespace) -> None:
     predictions = ledger.load(config.resolve(config.paths.area_predictions))
     inputs = pipeline.load_inputs(config)
     label_end = pipeline.label_cutoff(config, inputs.events, as_of)
-    result = validate.evaluate(config, predictions, inputs.events, label_end, as_of)
-    history = ledger.append_history(result, config.resolve(config.paths.validation))
-
-    print(json.dumps(result, indent=2, default=str))
-    print(f"history rows: {len(history)}")
-    if result["alert"]:
+    # forecasts made after and before the day-ahead results are scored separately
+    settled = predictions[predictions["delivery_date"] <= label_end]
+    alert = False
+    for kind in ("after", "before"):
+        if not (settled["model_version"].map(ledger.kind_of) == kind).any():
+            continue
+        result = validate.evaluate(config, predictions, inputs.events, label_end, as_of, kind)
+        history = ledger.append_history(result, config.resolve(config.paths.validation))
+        print(json.dumps(result, indent=2, default=str))
+        print(f"history rows: {len(history)}")
+        alert = alert or result["alert"]
+    if alert:
         print("ALERT: window skill is below the configured minimum", file=sys.stderr)
         sys.exit(2)
 
