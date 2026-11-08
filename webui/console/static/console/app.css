@@ -183,17 +183,19 @@ input[type=date]:focus, select:focus, .btn:focus-visible { outline: 2px solid va
 .step-lead { grid-column: span 2; background: var(--navy); color: #fff; border-color: var(--navy); border-top-color: var(--red); }
 .step.step-lead p { color: #c3cad9; }
 .step-lead input[type=date], .step-lead select.hour-pick { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.25); color: #fff; color-scheme: dark; }
+.step-lead select.day-pick option, .step-lead select.hour-pick option { background: #fff; color: var(--ink); }
 .step-kind { font: 500 10.5px var(--cond); text-transform: uppercase; letter-spacing: 1.8px; color: var(--muted); }
 .step-lead .step-kind { color: #ff8a84; }
 .step h3 { font-size: 18px; text-transform: uppercase; }
 .step p { margin: 0; font-size: 13px; color: var(--ink-2); flex: 1; }
-.fields { display: flex; gap: 10px; flex-wrap: wrap; }
+.fields { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-start; }
 .fields label { display: grid; gap: 4px; font: 500 10.5px var(--cond); text-transform: uppercase; letter-spacing: 1.2px; color: var(--muted); }
 .step-lead .fields label { color: #aab3c7; }
 .field-note { font: 400 11px var(--sans, inherit); text-transform: none; letter-spacing: 0; color: var(--muted); }
-.check-pick[hidden] { display: none; }
-.check-row { display: flex; align-items: center; gap: 8px; height: 36px; max-width: 280px; }
-.check-row input { width: 16px; height: 16px; margin: 0; accent-color: var(--red); flex: none; }
+.fields label.check-pick { flex: 1 0 100%; display: grid; grid-template-columns: auto 1fr; column-gap: 8px; row-gap: 2px; align-items: center; }
+.fields label.check-pick[hidden] { display: none; }
+.check-pick input { grid-row: 1; width: 16px; height: 16px; margin: 0; accent-color: var(--red); }
+.check-pick small { grid-column: 2; }
 .step .btn { align-self: flex-start; }
 .step-warn { list-style: none; margin: 0; padding: 8px 10px; display: grid; gap: 3px; font-size: 12px; color: #7a4f0e;
   background: #fdf3e2; border-left: 3px solid var(--amber); border-radius: var(--radius); }

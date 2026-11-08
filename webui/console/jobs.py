@@ -83,10 +83,10 @@ def steps() -> list[dict]:
     # the last settled day: requests of later days are not complete yet
     settled = data.label_end()
     test_end = settled.date() if settled is not None else today - timedelta(days=2)
-    hour = {"name": "hour", "label": "Issued at", "type": "select", "options": data.hours()}
+    options = [{**o, "text": o["note"], "note": f"Issued at {o['text']}"} for o in data.hours()]
+    hour = {"name": "hour", "label": "Issued at", "type": "select", "options": options}
     # offered only for an issue hour before the day-ahead results
-    use = {"name": "forecaster", "label": "Use the forecaster", "type": "check",
-           "note": f"{data.CONFIG.features.issue_hour:02d}:00 model, with the day-ahead price, net position, wind and solar forecast"}
+    use = {"name": "forecaster", "label": "Use the forecaster", "type": "check", "note": ""}
     found = [
         {"key": "daily", "title": "Daily forecast run", "kind": "chain", "lead": True,
          "text": "Refresh GOPACS, weather and market data, then issue tomorrow's forecast with the inspector's verdict.",
