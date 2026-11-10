@@ -281,7 +281,10 @@ def feature_groups(columns: list[str]) -> list[tuple[str, list[str]]]:
 FILE_GROUPS = [
     ("Data", [("gopacs", "GOPACS requests", "Update GOPACS"), ("notices", "Transport restriction notices", "Update GOPACS"),
               ("weather", "Weather forecasts", "Update weather"), ("sdac", "Day-ahead prices", "Update market data"),
-              ("forecasts", "Load, wind and solar forecasts", "Update market data"), ("locations", "Area locations", "Locate areas")]),
+              ("forecasts", "Load, wind and solar forecasts", "Update market data"),
+              ("neighbour_weather", "Weather in Germany, Belgium and France", "Update weather"),
+              ("neighbour_load", "Load forecasts of Germany, Belgium and France", "Update market data"),
+              ("locations", "Area locations", "Locate areas")]),
     ("Model", [("model", "Trained model", "Retrain model"), ("walk_forward", "Test (14-day windows)", "Download from Drive")]
               + [(f"walk_forward_sdac_forecaster_{h}", f"Test (14-day windows), {h:02d}:00 with the SDAC Forecaster", "Download from Drive")
                  for h in CONFIG.hours if h < CONFIG.features.market_hour]),

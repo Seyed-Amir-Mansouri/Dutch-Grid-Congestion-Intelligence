@@ -11,7 +11,7 @@ URL = "https://drive.usercontent.google.com/download?id={}&export=download&confi
 CHUNK = 1 << 20
 # one zip holding every shared file; the [drive] key "bundle" links to it
 BUNDLE = "bundle"
-DATA_FILES = ["gopacs", "notices", "sdac", "forecasts", "weather", "locations"]
+DATA_FILES = ["gopacs", "notices", "sdac", "forecasts", "weather", "locations", "neighbour_weather", "neighbour_load"]
 MODEL_FILES = ["model", "walk_forward", "inspector_history"]
 # the test with the SDAC Forecaster, for issue hours before the day-ahead results
 SDAC_FORECASTER_FILES = ["walk_forward_sdac_forecaster"]

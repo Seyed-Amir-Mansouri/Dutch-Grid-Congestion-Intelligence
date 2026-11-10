@@ -25,7 +25,8 @@ STAGES = {
 }
 # short stage names for the files a Drive download replaces
 DRIVE_STAGES = {"gopacs": "Requests", "notices": "Notices", "sdac": "Market", "forecasts": "Forecasts",
-                "weather": "Weather", "locations": "Locations", "model": "Model", "inspector_history": "Inspector",
+                "weather": "Weather", "neighbour_weather": "Neighbour weather", "neighbour_load": "Neighbour load",
+                "locations": "Locations", "model": "Model", "inspector_history": "Inspector",
                 "walk_forward": "Test", "walk_forward_sdac_forecaster": "Test with SDAC Forecaster", "bundle": "All files"}
 PROGRESS = re.compile(r"progress: (\d+)%")
 # files the steps read: a label and the step that makes the file, or None for reference files
