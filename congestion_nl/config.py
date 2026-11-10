@@ -30,6 +30,8 @@ class Paths:
     area_predictions: Path
     validation: Path
     sdac_forecasts: Path = Path("outputs/sdac_forecasts.csv")
+    neighbour_weather: Path = Path("data/raw/neighbour_weather.csv")
+    neighbour_load: Path = Path("data/raw/neighbour_load.csv")
 
 
 @dataclass(frozen=True)

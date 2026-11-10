@@ -71,6 +71,28 @@ def fetch_cell(cell: str, start: pd.Timestamp, end: pd.Timestamp, size: float, g
     return frame[schemas.WEATHER_COLUMNS]
 
 
+# points in Germany, Belgium and France, whose weather and load drive the Dutch net position
+NEIGHBOUR_POINTS = {
+    "DE": [(54.2, 9.0), (53.1, 8.0), (53.6, 12.0), (52.5, 13.4), (51.0, 7.0), (50.5, 10.0), (48.8, 9.2), (48.2, 11.6)],
+    "BE": [(51.0, 4.0), (50.5, 5.0), (51.5, 2.8)],
+    "FR": [(50.6, 3.1), (48.8, -1.7), (47.2, -1.6), (47.5, 1.9), (44.0, 0.0), (43.6, 1.4), (47.3, 5.0), (44.5, 4.8)],
+}
+
+
+def fetch_neighbours(start: pd.Timestamp, end: pd.Timestamp, get_json=_get_json, sleep=time.sleep) -> pd.DataFrame:
+    """Fetch the same forecasts for the neighbour points, with the country of each point in the first column."""
+    pause = SECONDS_PER_CALL * math.ceil(((end - start).days + 1) / 14)
+    parts = []
+    for country, points in NEIGHBOUR_POINTS.items():
+        for lat, lon in points:
+            if parts:
+                sleep(pause)
+            frame = fetch_cell(f"{lat:.2f}N {lon:.2f}E", start, end, 0.0, get_json)
+            frame.insert(0, "country", country)
+            parts.append(frame)
+    return pd.concat(parts, ignore_index=True)
+
+
 def fetch(cells: list[str], start: pd.Timestamp, end: pd.Timestamp, size: float, get_json=_get_json, sleep=time.sleep) -> pd.DataFrame:
     """Fetch every cell in turn, pausing between cells to stay inside the free usage limits."""
     pause = SECONDS_PER_CALL * math.ceil(((end - start).days + 1) / 14)

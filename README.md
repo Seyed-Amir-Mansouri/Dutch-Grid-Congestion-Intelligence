@@ -25,7 +25,7 @@ The day-ahead price, net position and wind and solar forecasts come out around 1
 | After Day-Ahead | 14:00 | Everything, including the day-ahead results. 78 facts. |
 | Before Day-Ahead, with the SDAC Forecaster | 11:00 | The same 14:00 model, with the five market facts (price, net position, wind, solar and residual load) forecast by the SDAC Forecaster. |
 
-The SDAC Forecaster forecasts the day-ahead market inputs before they are published. It is a set of small models, one each for price, net position, wind and solar. It works from the weather forecast, the load forecast, the calendar and the values of the day before and a week before. It is retrained on all earlier days each time it runs, so it has no model file. Residual load is then the load forecast minus the forecast wind and solar.
+The SDAC Forecaster forecasts the day-ahead market inputs before they are published. It is a set of small models, one each for price, net position, wind and solar. It works from the weather forecast, the load forecast, the calendar and the values of the day before and a week before. The net position depends mostly on Germany, Belgium and France, so that model also gets the weather over those countries, their load forecast for the day, a longer history of the Dutch net position and price, and it counts recent days more. It is retrained on all earlier days each time it runs, so it has no model file. Residual load is then the load forecast minus the forecast wind and solar.
 
 ## How well it works
 
@@ -36,7 +36,7 @@ The numbers below come from a test on 42 days (20 September to 31 October 2026).
 | After Day-Ahead (14:00) | 41 | 37 | 4 | 31 | 109 |
 | Before Day-Ahead with the SDAC Forecaster | 36 | 32 | 4 | 36 | 101 |
 
-The SDAC Forecaster is weaker in the first two weeks of the test. How well it forecasts the market values (correlation with the real values over the 42 days, where 1 is a perfect match): price 0.86, net position 0.39, wind 0.97, solar 0.98, residual load 0.98. Net position is the weak one.
+The SDAC Forecaster is weaker in the first two weeks of the test. How well it forecasts the market values (correlation with the real values over the 42 days, where 1 is a perfect match): price 0.86, net position 0.64, wind 0.97, solar 0.98, residual load 0.98. Net position is still the weakest. Before the neighbour inputs were added it was 0.39.
 
 The results are also on the Performance page of the app, split into 14-day windows. Most of the misses are areas that start up again after a few quiet days, and Enexis notices are the inspector's most useful input.
 
@@ -109,6 +109,8 @@ demo --start D --days N               made-up input files for trying the tool ou
 | `data/raw/sdac_results.csv` | day-ahead price and net position per quarter-hour | fetch-entsoe |
 | `data/raw/system_forecasts.csv` | load, wind and solar forecasts | fetch-entsoe |
 | `data/raw/weather.csv` | temperature, sun, cloud and wind per grid cell and hour | fetch-weather |
+| `data/raw/neighbour_weather.csv` | the same for 19 points in Germany, Belgium and France | fetch-weather |
+| `data/raw/neighbour_load.csv` | load forecast of Germany, Belgium and France | fetch-entsoe |
 | `data/processed/area_locations.csv` | each area's point and grid cell | locate |
 
 A few things worth knowing about it:

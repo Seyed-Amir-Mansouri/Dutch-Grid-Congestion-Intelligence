@@ -16,6 +16,8 @@ predictions = "outputs/predictions.csv"
 area_predictions = "outputs/area_predictions.csv"
 validation = "outputs/validation_history.csv"
 sdac_forecasts = "outputs/sdac_forecasts.csv"
+neighbour_weather = "data/raw/neighbour_weather.csv"
+neighbour_load = "data/raw/neighbour_load.csv"
 
 [grid]
 cell_degrees = 0.25

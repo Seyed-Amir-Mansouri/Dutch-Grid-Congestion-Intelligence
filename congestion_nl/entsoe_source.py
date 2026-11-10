@@ -23,7 +23,7 @@ def quarter_values(series: pd.Series, column: str, start: pd.Timestamp, end: pd.
     return frame.groupby(schemas.MARKET_KEY, as_index=False)[column].mean()
 
 
-def _query(method, start: pd.Timestamp, end: pd.Timestamp, **kwargs):
+def _query(method, start: pd.Timestamp, end: pd.Timestamp, area: str = AREA, **kwargs):
     """Run an ENTSO-E query in three-month pieces, well inside the one-year limit and the server's time limit."""
     parts = []
     piece_start = start
@@ -31,7 +31,7 @@ def _query(method, start: pd.Timestamp, end: pd.Timestamp, **kwargs):
         if parts:
             time.sleep(PAUSE_SECONDS)
         piece_end = min(piece_start + pd.DateOffset(months=PIECE_MONTHS), end)
-        parts.append(method(AREA, start=piece_start, end=piece_end, **kwargs))
+        parts.append(method(area, start=piece_start, end=piece_end, **kwargs))
         piece_start = piece_end
     joined = pd.concat(parts)
     return joined[~joined.index.duplicated(keep="last")]
@@ -68,6 +68,21 @@ def fetch_forecasts(client, start: pd.Timestamp, end: pd.Timestamp) -> pd.DataFr
 
     merged = load_frame.merge(wind_frame, on=schemas.MARKET_KEY, how="outer")
     merged = merged.merge(solar_frame, on=schemas.MARKET_KEY, how="outer")
+    return merged.sort_values(schemas.MARKET_KEY).reset_index(drop=True)
+
+
+# the neighbours whose load forecast for the day is out before the day-ahead results
+NEIGHBOUR_AREAS = ["DE_LU", "BE", "FR"]
+
+
+def fetch_neighbour_load(client, start: pd.Timestamp, end: pd.Timestamp) -> pd.DataFrame:
+    """Fetch the load forecast of Germany, Belgium and France per quarter-hour."""
+    merged = None
+    for area in NEIGHBOUR_AREAS:
+        load = _query(client.query_load_forecast, start, end, area=area)
+        load = load["Forecasted Load"] if hasattr(load, "columns") else load
+        frame = quarter_values(load, f"{area}_load", start, end)
+        merged = frame if merged is None else merged.merge(frame, on=schemas.MARKET_KEY, how="outer")
     return merged.sort_values(schemas.MARKET_KEY).reset_index(drop=True)
 
 

@@ -30,6 +30,15 @@ def cmd_demo(args: argparse.Namespace) -> None:
         print(f"{name}: {path}")
 
 
+def _neighbour_start(config, path, column: str, requested: pd.Timestamp) -> pd.Timestamp:
+    """Where a neighbour download starts: the requested day, an earlier day if the saved file stops before it,
+    and the first day of the data when there is no file yet."""
+    if not path.exists():
+        return config.grid.start_date
+    saved = pd.to_datetime(pd.read_csv(path, usecols=[column])[column]).max().normalize()
+    return min(requested, saved)
+
+
 def cmd_fetch_entsoe(args: argparse.Namespace) -> None:
     """Fetch SDAC prices, net position and forecasts from ENTSO-E and merge them into the CSVs."""
     from . import entsoe_source
@@ -61,6 +70,15 @@ def cmd_fetch_entsoe(args: argparse.Namespace) -> None:
     print(f"sdac: {sdac_path} ({len(sdac)} rows)")
     print(f"forecasts: {forecasts_path} ({len(forecasts)} rows)")
 
+    # the neighbours' load forecasts, which the SDAC Forecaster uses for the net position
+    load_path = config.resolve(config.paths.neighbour_load)
+    first = _neighbour_start(config, load_path, "delivery_date", _timestamp(args.start)).tz_localize("Europe/Amsterdam")
+    load = entsoe_source.fetch_neighbour_load(client, first, end)
+    if load_path.exists():
+        load = entsoe_source.merge(pd.read_csv(load_path), load)
+    load.to_csv(load_path, index=False)
+    print(f"neighbour load: {load_path} ({len(load)} rows)")
+
 
 def cmd_fetch_weather(args: argparse.Namespace) -> None:
     """Fetch Open-Meteo forecasts for every located cell and merge them into the weather CSV."""
@@ -78,6 +96,18 @@ def cmd_fetch_weather(args: argparse.Namespace) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     weather.to_csv(path, index=False)
     print(f"weather: {path} ({len(weather)} rows for {len(cells)} cells)")
+
+    # the weather over Germany, Belgium and France, which the SDAC Forecaster uses for the net position
+    near_path = config.resolve(config.paths.neighbour_weather)
+    first = _neighbour_start(config, near_path, "time", _timestamp(args.start))
+    near = weather_source.fetch_neighbours(first, _timestamp(args.end))
+    if near_path.exists():
+        near["time"] = pd.to_datetime(near["time"])
+        old = pd.read_csv(near_path, parse_dates=["time"])
+        near = pd.concat([old, near]).drop_duplicates(["cell", "time"], keep="last")
+    near = near.sort_values(["country", "cell", "time"])
+    near.to_csv(near_path, index=False)
+    print(f"neighbour weather: {near_path} ({len(near)} rows)")
 
 
 def cmd_fetch_gopacs(args: argparse.Namespace) -> None:
