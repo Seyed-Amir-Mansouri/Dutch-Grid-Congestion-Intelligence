@@ -36,7 +36,7 @@ The numbers below come from a test on 42 days (20 September to 31 October 2026).
 | After Day-Ahead (14:00) | 41 | 37 | 4 | 31 | 109 |
 | Before Day-Ahead with the SDAC Forecaster | 36 | 32 | 4 | 36 | 101 |
 
-The SDAC Forecaster is weaker in the first two weeks of the test. How well it forecasts the market values (correlation with the real values over the 42 days, where 1 is a perfect match): price 0.86, net position 0.64, wind 0.97, solar 0.98, residual load 0.98. Net position is still the weakest. Before the neighbour inputs were added it was 0.39.
+The SDAC Forecaster is weaker in the first two weeks of the test. How well it forecasts the market values (correlation with the real values over the 42 days, where 1 is a perfect match): price 0.86, net position 0.65, wind 0.97, solar 0.98, residual load 0.98. Net position is still the weakest. Before the neighbour inputs were added it was 0.39.
 
 The results are also on the Performance page of the app, split into 14-day windows. Most of the misses are areas that start up again after a few quiet days, and Enexis notices are the inspector's most useful input.
 

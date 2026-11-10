@@ -5,7 +5,7 @@ the load forecast, the calendar, and each target on D-1 and D-7 with its D-1 mea
 target, trained on every earlier day each time it is used.
 
 The net position depends mostly on Germany, Belgium and France, so it also gets their weather and load forecast, a
-longer Dutch history of its own and of the price, and counts recent days more.
+longer Dutch history of its own and of the price, totals and gaps built from them, and counts recent days more.
 """
 from __future__ import annotations
 
@@ -25,6 +25,8 @@ NEIGHBOUR_LOAD = ["DE_LU_load", "BE_load", "FR_load"]
 # the Dutch net position and price of earlier days, from the net position's point of view
 HISTORY = ["np_d2", "np_d3", "np_wd4", "np_mean7", "np_mean3", "np_std7", "np_d1_min", "np_d1_max",
            "price_d1", "price_d7", "price_d1_mean"]
+# totals and gaps built from the neighbour inputs, which a tree finds hard to build from single columns
+DERIVED = ["x_wind3_sum", "x_rad_mean", "x_load_sum", "x_nl_share", "x_wind3_gap", "x_rad_gap", "x_resid_proxy"]
 # a day this many days older counts half as much when training the net position
 HALF_LIFE_DAYS = 180.0
 CALENDAR = ["quarter", "hour", "weekday", "month", "doy_sin", "doy_cos", "off_day", "winter_time"]
@@ -85,6 +87,24 @@ def net_position_history(t: pd.DataFrame) -> pd.DataFrame:
     return out.merge(mean, on="delivery_date", how="left")
 
 
+def derived_inputs(t: pd.DataFrame) -> pd.DataFrame:
+    """Neighbour wind and sun totals, their load total, the Dutch share of it, the gaps to the Dutch weather and a
+    rough residual load, each scaled by its spread over the first year of the table."""
+    out = pd.DataFrame(index=t.index)
+    wind = t[[f"nb_{c}_wind3" for c in ("DE", "BE", "FR")]]
+    rad = t[[f"nb_{c}_radiation_wm2" for c in ("DE", "BE", "FR")]]
+    out["x_wind3_sum"] = wind.sum(axis=1, min_count=1)
+    out["x_rad_mean"] = rad.mean(axis=1)
+    out["x_load_sum"] = t[NEIGHBOUR_LOAD].sum(axis=1, min_count=1)
+    out["x_nl_share"] = t["load_forecast_mw"] / out["x_load_sum"]
+    out["x_wind3_gap"] = t["wind3"] - out["x_wind3_sum"] / 3
+    out["x_rad_gap"] = t["rad"] - out["x_rad_mean"]
+    first = out[t["delivery_date"] < t["delivery_date"].min() + pd.Timedelta(days=365)]
+    z = lambda col: (out[col] - first[col].mean()) / first[col].std()
+    out["x_resid_proxy"] = z("x_load_sum") - z("x_wind3_sum") - z("x_rad_mean")
+    return out[DERIVED]
+
+
 def table(sdac: pd.DataFrame, forecasts: pd.DataFrame, weather: pd.DataFrame, day: pd.Timestamp,
           neighbours: dict | None = None) -> pd.DataFrame:
     """Every quarter-hour up to day with the targets where known and the SDAC Forecaster's inputs.
@@ -117,6 +137,7 @@ def table(sdac: pd.DataFrame, forecasts: pd.DataFrame, weather: pd.DataFrame, da
         t = t.merge(net_position_history(t), on=schemas.MARKET_KEY, how="left")
         t = t.merge(neighbour_weather(neighbours["weather"]), on=["delivery_date", "hour"], how="left")
         t = t.merge(neighbours["load"], on=schemas.MARKET_KEY, how="left")
+        t = t.join(derived_inputs(t))
     return t.reset_index(drop=True)
 
 
@@ -124,7 +145,7 @@ def inputs_for(target: str, neighbours: bool = False) -> list[str]:
     """The SDAC Forecaster's inputs for one target; the net position also gets the neighbours' when they are known."""
     columns = CALENDAR + ["load_forecast_mw"] + WEATHER + [f"{target}_d1", f"{target}_d7", f"{target}_d1_mean"]
     if neighbours and target == NET_POSITION:
-        columns += HISTORY + neighbour_columns() + NEIGHBOUR_LOAD
+        columns += HISTORY + neighbour_columns() + NEIGHBOUR_LOAD + DERIVED
     return columns
 
 
